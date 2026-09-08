@@ -1,0 +1,11 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+out/
+.uv/
+.ruff_cache/
+
+**/*.mp4
+sop_raw_docs/
+reference/sop_north_star.md
