@@ -1,0 +1,72 @@
+# Video knobs (defaults).
+# To override without editing this file, create a YAML file anywhere with just the keys
+# you want to change, then set the SOP_VIDEO_CONFIG env var to its path.
+
+# Two independent axes, decoupled: HOW frames are picked (frame_extraction) and HOW the
+# picked frames are turned into statements (strategy). Tune either without touching the
+# other. See README.md for what each option does and when it wins. An unknown value in
+# either fails the run rather than silently falling back.
+
+# Which frame-extraction strategy runs: uniform | difference.
+frame_extraction: uniform
+
+# Which video-to-facts (analysis) strategy runs: naive | sequential.
+strategy: naive
+
+# --- shared by every frame-extraction strategy AND every analysis strategy ---
+shared:
+  # Frame width in pixels; 768 is the width where CUSTOM_SYSTEM field labels are still readable.
+  frame_width: 768
+  # Audio chunk length in seconds for transcription. Whisper rejects uploads over 25 MB;
+  # 10 minutes (600s) of mono 16 kHz AAC is a few MB. Unrelated to sequential.chunk_s below.
+  audio_chunk_s: 600.0
+  # Hard cap on frames sent to the model, applied AFTER frame extraction, regardless of
+  # which frame_extraction strategy produced them. Over budget, every Nth frame is kept
+  # (not just the first N) so the END of the procedure isn't dropped. null = no cap.
+  #
+  # CAUTION for `sequential`: this cap applies to the WHOLE recording's frame list
+  # before it is bucketed into chunks. sequential's old guarantee that "no frame is ever
+  # dropped to fit a budget" is no longer structurally impossible to violate — it now
+  # depends on this being set generously, or to null, when sequential is selected.
+  max_frames: 250
+
+# --- frame_extraction: uniform (today's fixed-interval sampling, unchanged) ---
+uniform:
+  # Seconds between sampled frames, before the shared max_frames cap is applied.
+  #
+  # CAUTION for `sequential`: this now ALSO governs sequential's effective frame density
+  # (there is no more sequential-only interval knob). The old default was a DERIVED 6.0s
+  # (chunk_s / chunk_frames = 120/20); this shared default is 2.0s — about 3x more frames
+  # (and API cost) per recording for existing sequential users who don't override it.
+  # Raise this (or switch frame_extraction to `difference`) to control that cost.
+  frame_interval_s: 2.0
+
+# --- frame_extraction: difference ---
+# Densely sample, then keep only frames that changed noticeably from the previous
+# SAMPLED frame — inspired by (not a port of) github.com/byjlw/video-analyzer. The first
+# sampled frame is always kept. If the kept frames still exceed max_frames, they are
+# thinned the same evenly-spaced way as `uniform` (not score-ranked), so the end of the
+# procedure is never the part dropped.
+difference:
+  # Seconds between DENSELY sampled candidate frames — a separate knob from uniform's
+  # frame_interval_s, since this strategy samples much more densely than it keeps.
+  sample_interval_s: 1.0
+  # Mean grayscale pixel difference (0-255) a candidate must exceed, versus the previous
+  # sampled candidate, to be kept as a keyframe.
+  frame_difference_threshold: 10.0
+
+# --- analysis strategy: naive ---
+# No strategy-specific knobs left — frame sampling/capping now lives in the sections
+# above, shared with sequential. Kept as an explicit empty mapping (not omitted) so a
+# reader sees at a glance that naive intentionally has nothing extra to configure.
+naive: {}
+
+# --- analysis strategy: sequential ---
+sequential:
+  # Seconds of video per chunk; one chunk is one LLM call carrying the running state.
+  chunk_s: 120.0
+  # How many of the most recent logged statements are carried into the next call. Caps
+  # the prompt growth on a long recording.
+  state_max_actions: 40
+  # Output ceiling per chunk call (a whole recording needs more; one chunk needs less).
+  chunk_max_tokens: 4000
