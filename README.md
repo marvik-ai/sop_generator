@@ -86,20 +86,24 @@ flowchart TD
     IN[(inputs folder — docx, md, txt, mp4)] --> ING{2. Ingest into source-labeled corpus}
     ING --> CORP[(Corpus of inputs)]
 
-    CORP --> EXTRACT_TEXT{3. Extract statements — text files}
-    CORP --> EXTRACT_VIDEO{3. Extract statements — video files, strategy-dependent}
-    CORP --> EXTRACT_FOLDER{3. Extract statements — one folder of related documents, fused}
+    subgraph STMTEXTRACT["Statement extraction"]
+        CORP --> EXTRACT_TEXT{3. Extract statements — text files}
+        CORP --> EXTRACT_VIDEO{3. Extract statements — video files, strategy-dependent}
+        CORP --> EXTRACT_FOLDER{3. Extract statements — one folder of related documents, fused}
 
-    EXTRACT_TEXT --> STMTS[(extraction.json — statements with source, confidence, quote)]
-    EXTRACT_VIDEO --> STMTS
-    EXTRACT_FOLDER --> STMTS
+        EXTRACT_TEXT --> STMTS[(extraction.json — statements with source, confidence, quote)]
+        EXTRACT_VIDEO --> STMTS
+        EXTRACT_FOLDER --> STMTS
+    end
 
-    STMTS --> RECON{4. Reconcile — cross-file conflict check}
-    RECON --> CONF[(conflicts.json)]
+    subgraph SOPINITSYN["SOP initial synthetization"]
+        STMTS --> RECON{4. Reconcile — cross-file conflict check}
+        RECON --> CONF[(conflicts.json)]
 
-    STMTS --> SYN{5. Synthesize SOP}
-    CONF --> SYN
-    GUIDE[sop_template.json] --> SYN
+        STMTS --> SYN{5. Synthesize SOP}
+        CONF --> SYN
+        GUIDE[sop_template.json] --> SYN
+    end
 
     SYN --> SOP1[(sop_generated.md draft — inline GAP tags + typed Section 10)]
 
