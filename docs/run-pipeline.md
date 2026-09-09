@@ -299,6 +299,35 @@ The raw generation is unguarded, so `build_diagram()` wraps it with three checks
 Not covered (tracked separately): visualising `[GAP G-xx]` routing tags in the diagram, and
 run-to-run id/label drift from the LLM generator.
 
+## Revision mode (`--sop <path>`)
+
+The client loop, once an SOP already exists: its `[GAP G-xx]` rows were taken to the
+business, the answers came back as new transcripts/documents, and those need to fold
+back into the SOP rather than forcing a from-scratch regeneration that loses everything
+already agreed.
+
+`--sop <path>` switches `run` onto this route. Extraction is unchanged — the new raw
+material goes through the normal per-file/video/folder map step. The existing SOP joins
+the pipeline at exactly two points:
+
+- **Reconcile** (`prompts/07_reconcile.md` + the `07b_reconcile_with_sop.md` overlay,
+  appended only when `--sop` is given): the SOP's confidently-stated content is compared
+  against the new extracted statements like any other source. A same-subject value
+  disagreement is a conflict; a value the SOP itself already flagged as a gap is *not* —
+  a new statement supplying it is a resolution.
+- **Synthesize** (`prompts/03_synthesize_sop.md` + the `03b_revise_existing_sop.md`
+  overlay): the model outputs the full revised SOP, not a diff. Resolved gaps lose their
+  inline `[GAP G-xx]` tag and Section 10 row (surviving gaps renumber contiguously from
+  `G-01`); untouched sections and unresolved gaps carry over unchanged; a confident
+  contradiction becomes a new `AMBIGUITY` gap naming both the SOP and the new source.
+
+The gap-audit corpus (`gap_audit` checks the synthesized SOP against the raw sources) is
+also extended with the old SOP's content — otherwise everything carried over from it
+reads as an unsupported hallucination.
+
+With no `--sop`, both overlays are skipped and the two prompts reach the model exactly as
+in from-scratch mode — the revision route adds nothing to the default path.
+
 ## Where to make changes
 
 - **Change what facts get extracted, or how aggressively:** edit
