@@ -78,8 +78,8 @@ go in a subfolder of `inputs/`. Each subfolder is extracted as one unit.
 5. **synthesize** (`prompts/03`) — extracted statements + reconciled conflicts + SOP template → full SOP, with inline `[GAP G-xx]` + typed §10.
 6. **gap audit** (`prompts/04`) — self-critique: catch hallucinations + missing gaps against the raw source corpus.
 7. **revise** (`prompts/08`) — surgical patch: applies the audit's findings back onto the SOP (add/retype/reword gaps, soften unsupported claims) without inventing new content. Followed by deterministic structural checks (gap-ID references, fork-branch completeness, systems coverage) whose warnings are appended to `out/gaps_report.md`.
-8. **diagram** (`prompts/06`) — Mermaid `flowchart TD` mirroring the SOP's Section 6 steps, appended to the SOP as `## Annex 1: Mermaid diagram` (also written to `out/sop_flow_diagram.mmd`). Guarded: the diagram is parse-validated and rendered to `out/sop_flow_diagram.svg` via the Mermaid CLI (retried once on a parse error), and consistency-checked against the SOP body (`validate.validate_diagram`); any parity warnings are also appended to `out/gaps_report.md`.
-9. **evaluate** (`prompts/05`) — LLM-judge: reconstruction coverage + gap accuracy vs the north star.
+8. **diagram** (`prompts/06`) — Mermaid `flowchart TD` mirroring the SOP's Section 6 steps, appended to the SOP as `## Annex 1: Mermaid diagram` (also written to `out/sop_flow_diagram.mmd`).
+9. **invariants** (`prompts/09`) — Gather invariants that apply to the whole SOP.
 
 ```mermaid
 flowchart TD
