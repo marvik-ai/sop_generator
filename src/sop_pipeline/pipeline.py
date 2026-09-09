@@ -450,6 +450,8 @@ def synthesize(
     conflicts: list[dict] | None = None,
     metadata: dict | None = None,
     existing_sop: str = "",
+    existing_sop_name: str = "",
+    new_input_names: list[str] | None = None,
 ) -> str:
     """Synthesize the full SOP markdown from extracted statements + the schema guide.
 
@@ -459,7 +461,10 @@ def synthesize(
 
     `existing_sop`, when given, appends the `03b_revise_existing_sop.md` overlay so the
     model revises that SOP in place instead of writing a from-scratch one — with no SOP
-    this is a no-op and the base prompt reaches the model unchanged.
+    this is a no-op and the base prompt reaches the model unchanged. `existing_sop_name`
+    and `new_input_names` tell that overlay what to cite in Section 1's "Source
+    documents" (the existing SOP file itself, not its own transitive source list, plus
+    this revision's new inputs).
     """
     metadata = metadata or {}
     template = load_prompt("03_synthesize_sop.md")
@@ -474,6 +479,8 @@ def synthesize(
         AUTHOR=metadata.get("author", "TBD"),
         VERSION=metadata.get("version", "0.1 (draft)"),
         EXISTING_SOP=existing_sop,
+        EXISTING_SOP_NAME=existing_sop_name,
+        NEW_INPUT_FILES=", ".join(new_input_names or []),
         STATUS=metadata.get("status", "Draft"),
     )
     return llm.complete(
@@ -585,6 +592,18 @@ def _table_of_contents(sop_md: str) -> str:
         else:
             lines.append(f"- [{heading_text}](#{slug})")
     return "\n".join(lines)
+
+
+_VERSION_NUM_RE = re.compile(r"(\d+)\.(\d+)")
+
+
+def _bump_version(version: str) -> str:
+    """Increment the minor version number by 1 (e.g. '0.1 (draft)' -> '0.2 (draft)')."""
+    match = _VERSION_NUM_RE.search(version)
+    if not match:
+        return version
+    major, minor = match.groups()
+    return _VERSION_NUM_RE.sub(f"{major}.{int(minor) + 1}", version, count=1)
 
 
 def _extract_section1_field(sop_md: str, label: str) -> str | None:
@@ -1014,12 +1033,18 @@ def run(
     print("Synthesizing SOP...")
     schema_guide = schema_guide_path.read_text(encoding="utf-8")
     metadata = llm.document_metadata()
+    if existing_sop:
+        old_version = _extract_section1_field(existing_sop, "Version")
+        if old_version:
+            metadata = {**metadata, "version": _bump_version(old_version)}
     sop_md = synthesize(
         statements,
         schema_guide,
         conflicts=conflicts,
         metadata=metadata,
         existing_sop=existing_sop,
+        existing_sop_name=sop_path.name if sop_path else "",
+        new_input_names=[d.name for d in docs],
     )
     sop_path = out_dir / "sop_generated.md"
     sop_path.write_text(sop_md + "\n", encoding="utf-8")

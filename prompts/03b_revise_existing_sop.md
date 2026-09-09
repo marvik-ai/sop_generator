@@ -1,8 +1,9 @@
 ## Overlay: revising an existing SOP (amends the rules above)
 
 You are revising an existing SOP, supplied below (EXISTING SOP), using new extracted
-statements gathered specifically to close its gaps. Output the **full revised SOP**, in
-the structure the schema guide defines — not a diff, not a patch, not a changelog.
+statements gathered specifically to close its gaps. Output the **full revised SOP**,
+covering Sections 1–11 as the schema guide defines them — not a diff, not a patch, not
+a changelog.
 
 This amends the base rule "build ONLY from the supplied extracted statements": the
 existing SOP is now also an authorized source of fact. Carry its content over wherever the
@@ -28,6 +29,23 @@ How to merge:
   the new statements introduce follow the base prompt's normal rules (inline `[GAP G-xx]`
   tags, typed gaps-log rows, IF/THEN decision logic, etc.) exactly as if this were a
   from-scratch synthesis.
+- **Update the change log.** VERSION already reflects the bumped version number for this
+  revision (the run computed it from the existing SOP's own `Version` field, incremented by
+  0.1 — e.g. `0.1` becomes `0.2`). In Section 11, keep every existing row unchanged and append
+  one new row for this revision using that VERSION value, RUN_DATE, and a brief description of
+  what changed in this revision.
+- **Never carry over the Annex/Appendix.** The EXISTING SOP
+  below may already end with an appended "Annex 1: Mermaid diagram" and/or "Appendix
+  A: Machine-readable evaluation checkpoint index" section. Do not carry it over.
+- **When sourcing documents**: Cite the old SOP once, not its transitive
+  sources.** Set this field to exactly: the existing SOP file
+  ({{EXISTING_SOP_NAME}}) plus the new source file(s) used for this revision
+  ({{NEW_INPUT_FILES}}).
+
+=== REVISION SOURCE INFO ===
+- EXISTING SOP FILE (being revised): {{EXISTING_SOP_NAME}}
+- NEW SOURCE FILE(S) FOR THIS REVISION: {{NEW_INPUT_FILES}}
+=== END REVISION SOURCE INFO ===
 
 === EXISTING SOP (the SOP being revised) ===
 {{EXISTING_SOP}}
