@@ -352,7 +352,7 @@ def extract(
             statement.setdefault("source", doc.name)
         statements.extend(found)
         suffix = " (cached, unchanged)" if cached else ""
-        print(f"  extracted {len(found)} statements from {doc.name}{suffix}")
+        print(f"  extracted {len(found)} statements from {doc.name}{suffix} ✅")
     return statements
 
 
@@ -1137,7 +1137,7 @@ def run(
     )
     print(f"Loaded {len(docs)} input file(s).")
 
-    print("Extracting statements...")
+    print("========STATEMENT EXTRACTION========")
     statements = extract(
         docs, cache_dir=out_dir / "extraction_cache", force=force_extract
     )
@@ -1146,7 +1146,7 @@ def run(
     )
 
     if sop_name or sop_description:
-        print(f"Filtering statements for SOP: {(sop_name or sop_description)!r}...")
+        print(f"Filtering statements for SOP: {(sop_name)!r}...")
         statements = filter_by_sop(
             statements,
             sop_name,
@@ -1159,6 +1159,7 @@ def run(
         )
         print(f"  kept {len(statements)} statement(s) for {sop_name!r}.")
 
+    print("========SOP DRAFT GENERATION========")
     print("Reconciling cross-file conflicts...")
     conflicts = reconcile(
         statements, cache_dir=out_dir, force=force_extract, existing_sop=existing_sop
@@ -1189,14 +1190,21 @@ def run(
     )
     sop_path = out_dir / sop_filename
     sop_path.write_text(sop_md + "\n", encoding="utf-8")
+    print(f"  SOP draft created ✅")
 
+    print("========SOP REFINEMENT========")
     print("Auditing for hallucinations / missing gaps...")
     report = gap_audit(sop_md, combined_corpus(audit_docs))
+    report_path = out_dir / "audit_report.md"
+    report_path.write_text(report + "\n", encoding="utf-8")
+    print(f"  audit report created at {report_path} ✅")
+
 
     print("Revising SOP from audit findings...")
     sop_md = revise(sop_md, report)
     sop_md = _normalize_section1(sop_md, metadata)
     sop_path.write_text(sop_md + "\n", encoding="utf-8")
+    print(f"  revised SOP created ✅")
 
     structural_warnings = (
         validate_gap_ids(sop_md)
@@ -1206,6 +1214,7 @@ def run(
     for warning in structural_warnings:
         print(f"  WARNING: {warning}")
 
+    print("========ANNEX CREATION========")
     print("Generating flow diagram...")
     mermaid_src, diagram_warnings = build_diagram(sop_md, out_dir)
     for warning in diagram_warnings:
