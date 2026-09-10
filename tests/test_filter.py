@@ -8,6 +8,8 @@ from __future__ import annotations
 from sop_pipeline import pipeline
 from sop_pipeline.pipeline import (
     _cached_filtered,
+    _sop_identifier_block,
+    _sop_name_slug,
     _write_filter_cache,
     filter_by_sop,
 )
@@ -20,13 +22,26 @@ _STATEMENTS = [
 ]
 
 
-def test_filter_is_a_noop_without_a_sop_name(monkeypatch):
+def test_filter_is_a_noop_without_a_sop_name_or_description(monkeypatch):
     def fail_if_called(*_args, **_kwargs):
-        raise AssertionError("llm.complete must not be called when sop_name is empty")
+        raise AssertionError(
+            "llm.complete must not be called when sop_name and sop_description are empty"
+        )
 
     monkeypatch.setattr(pipeline.llm, "complete", fail_if_called)
 
     assert filter_by_sop(_STATEMENTS, "") == _STATEMENTS
+    assert filter_by_sop(_STATEMENTS, "", "") == _STATEMENTS
+
+
+def test_filter_runs_on_description_alone(monkeypatch):
+    monkeypatch.setattr(
+        pipeline.llm, "complete", lambda *_a, **_k: '{"keep_indices": [0]}'
+    )
+
+    filtered = filter_by_sop(_STATEMENTS, "", "PFML process description")
+
+    assert filtered == [_STATEMENTS[0]]
 
 
 def test_filter_keeps_only_the_returned_indices_unmodified(monkeypatch):
@@ -68,6 +83,32 @@ def test_filter_prompt_includes_sop_name_and_indexed_statements(monkeypatch):
     assert '"target_section": "step"' in captured["prompt"]
 
 
+def test_filter_prompt_includes_sop_description_when_given(monkeypatch):
+    captured: dict[str, str] = {}
+
+    def fake_complete(prompt, **_kwargs):
+        captured["prompt"] = prompt
+        return '{"keep_indices": []}'
+
+    monkeypatch.setattr(pipeline.llm, "complete", fake_complete)
+
+    filter_by_sop(_STATEMENTS, "PFML process", "Paid family and medical leave claims")
+
+    assert "PFML process" in captured["prompt"]
+    assert "Paid family and medical leave claims" in captured["prompt"]
+
+
+def test_sop_identifier_block_reflects_whichever_fields_are_given():
+    assert _sop_identifier_block("PFML process", "") == "Name: PFML process"
+    assert (
+        _sop_identifier_block("", "some description") == "Description: some description"
+    )
+    assert (
+        _sop_identifier_block("PFML process", "some description")
+        == "Name: PFML process\nDescription: some description"
+    )
+
+
 # --- cache -------------------------------------------------------------------
 
 
@@ -88,6 +129,24 @@ def test_filter_cache_misses_when_sop_name_changes(tmp_path):
     assert _cached_filtered(tmp_path, _STATEMENTS, "template A" + "STD process") is None
 
 
+def test_filter_cache_misses_when_sop_description_changes(tmp_path):
+    _write_filter_cache(
+        tmp_path,
+        _STATEMENTS,
+        "template A" + "PFML process" + "description one",
+        [_STATEMENTS[0]],
+    )
+    # Same statements, same template + sop_name, different sop_description.
+    assert (
+        _cached_filtered(
+            tmp_path,
+            _STATEMENTS,
+            "template A" + "PFML process" + "description two",
+        )
+        is None
+    )
+
+
 def test_filter_uses_cache_instead_of_calling_the_model(monkeypatch, tmp_path):
     def fail_if_called(*_args, **_kwargs):
         raise AssertionError("llm.complete must not be called on a cache hit")
@@ -101,3 +160,22 @@ def test_filter_uses_cache_instead_of_calling_the_model(monkeypatch, tmp_path):
     result = filter_by_sop(_STATEMENTS, "PFML process", cache_dir=tmp_path)
 
     assert result == [_STATEMENTS[1]]
+
+
+# --- output filename slug -----------------------------------------------------
+
+
+def test_sop_name_slug_lowercases_and_collapses_non_alnum_runs():
+    assert _sop_name_slug("PFML Process") == "pfml_process"
+    assert _sop_name_slug("Weird!! Name--here") == "weird_name_here"
+
+
+def test_sop_name_slug_truncates_to_max_length_without_trailing_underscore():
+    assert (
+        _sop_name_slug("Standalone Unpaid Absence Adjudication")
+        == "standalone_unpaid_ab"
+    )
+    assert len(_sop_name_slug("Standalone Unpaid Absence Adjudication")) <= 20
+    # A cut that would land mid-word-boundary right after a separator strips the
+    # trailing underscore rather than leaving it dangling.
+    assert _sop_name_slug("abcdefghij klmnopqrst", max_length=11) == "abcdefghij"

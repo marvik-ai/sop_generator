@@ -35,6 +35,10 @@ uv run sop-pipeline generate-mocks --north-star path/to/sop_north_star.md
 # 2. generate an SOP from whatever is in inputs/  ->  out/sop_generated.md
 uv run sop-pipeline run --inputs inputs/ --schema-guide path/to/sop_template_guide.md
 
+# 2a. scope the run to one SOP when inputs/ mixes several processes  ->  out/sop_<slug>.md
+uv run sop-pipeline run --inputs inputs/ --schema-guide path/to/sop_template_guide.md \
+  --sop-name "PFML process" --sop-description "Paid family and medical leave claims handling"
+
 # 2b. revise an existing SOP instead: new inputs fill its gaps, untouched content carries over
 uv run sop-pipeline run --inputs inputs/ --schema-guide path/to/sop_template_guide.md \
   --sop out/sop_generated.md
@@ -57,6 +61,13 @@ To run on real client data, drop the transcripts/documents/recordings into `inpu
 Files that are related to each other — e.g. a recording, its transcript, notes about it —
 go in a subfolder of `inputs/`. Each subfolder is extracted as one unit.
 
+If `inputs/` mixes material from several distinct processes, pass `--sop-name` and/or
+`--sop-description` (either alone is enough) to scope the run to one of them — a filtering
+step keeps only the extracted statements relevant to that SOP before reconcile/synthesize
+see them. Omit both to use every extracted statement, unchanged.
+When `--sop-name` is given, the output is written to
+`out/sop_<slug of the name>.md` instead of `out/sop_generated.md`.
+
 ## Layout
 
 | Path | What it is |
@@ -78,6 +89,7 @@ go in a subfolder of `inputs/`. Each subfolder is extracted as one unit.
   - `prompts/02_extract.md` for text files
   - the **video module** (`src/sop_pipeline/video/`) for recordings, producing the same statement list plus a `supporting_media` timestamp range. It offers several interchangeable extraction strategies, selected in documented in [`src/sop_pipeline/video/README.md`](src/sop_pipeline/video/README.md)
   - `prompts/02_extract_folder.md` for a subfolder of `inputs/` — several records of one session. Its recordings are extracted first, then one fused call over them plus the folder's text yields a single statement list: agreement consolidated, disagreement kept as two statements.
+3b. **filter** (`prompts/02b`, optional) — when `--sop-name` and/or `--sop-description` is given, keeps only the extracted statements relevant to that named SOP before reconcile/synthesize see them; a no-op when neither flag is given. Applies to both from-scratch and revision runs.
 4. **reconcile** (`prompts/07`) — cross-file reduce step: compares every extracted statement against every other to catch same-subject, differing-value disagreements a single-file extraction can't see (e.g. a 5-day vs 10-day threshold). Feeds `synthesize` a `conflicts.json` list to render as typed `AMBIGUITY` gaps.
 5. **synthesize** (`prompts/03`) — extracted statements + reconciled conflicts + SOP template → full SOP, with inline `[GAP G-xx]` + typed §10.
 6. **gap audit** (`prompts/04`) — self-critique: catch hallucinations + missing gaps against the raw source corpus.
@@ -98,16 +110,20 @@ flowchart TD
         EXTRACT_TEXT --> STMTS[(extraction.json — statements with source, confidence, quote)]
         EXTRACT_VIDEO --> STMTS
         EXTRACT_FOLDER --> STMTS
+        SOPID[(Sop name + description)] --> FILTER{3b. Filter statements by SOP name/description}
+        STMTS --> FILTER
+        FILTER --> FSTMTS[(filtered_statements.json)]
     end
 
+
     subgraph SOPINITSYN["SOP initial synthetization"]
-        STMTS --> OLD_SOP
-        %% link above doesn't exist in the pipeline, added only for nicer rendering (see linkStyle 8 below)
-        STMTS --> RECON{4. Reconcile — cross-file conflict check}
+        FSTMTS --> OLD_SOP
+        %% link above doesn't exist in the pipeline, added only for nicer rendering (see linkStyle 11 below)
+        FSTMTS --> RECON{4. Reconcile — cross-file conflict check}
         OLD_SOP[old_sop.md] --> RECON
         RECON --> CONF[(conflicts.json)]
 
-        STMTS --> SYN{5. Synthesize SOP}
+        FSTMTS --> SYN{5. Synthesize SOP}
         CONF --> SYN
         OLD_SOP[old_sop.md] --> SYN
         GUIDE[sop_template.json] --> SYN
@@ -134,10 +150,11 @@ flowchart TD
     end
 
     style SOP2 fill:#2ecc71,stroke:#1e8449,color:#000000
-    linkStyle 8 opacity:0
+    linkStyle 11 opacity:0
 ```
 
 - **Facts are extracted** in step 3 (`EXTRACT_TEXT` / `EXTRACT_VIDEO`), one source file at a time — each statement carries its source, a verbatim quote, and a confidence level. Recordings go through the video module, whose chosen strategy decides how the file is turned into statements; the rest of the pipeline is identical either way.
+- **Facts are optionally filtered** in step 3b (`FILTER`) — when `--sop-name` and/or `--sop-description` is given, an LLM judge keeps only the statements relevant to that named SOP before reconcile/synthesize see them; with neither flag, `filtered_statements.json` is just `extraction.json` unchanged.
 - **Facts are synthesized** in step 5 (`SYN`), where the per-file statements, the cross-file conflicts from step 4, and the 11-section schema guide are combined into one draft SOP.
 - **Conflicts and gaps surface in layers, never inline as silent guesses:** cross-file value conflicts are caught deterministically in step 4 (`RECON`) and rendered as typed `AMBIGUITY` gaps during synthesis; anything synthesis still misses (hallucinations or ungapped assertions) is caught by the step 6 self-critique (`AUDIT`) and patched into the SOP by step 7 (`REVISE`)
 ## Docs

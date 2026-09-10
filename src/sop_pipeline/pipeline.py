@@ -23,7 +23,7 @@ from .validate import (
     validate_systems_coverage,
 )
 
-COMPANY_NAME="company_name"
+COMPANY_NAME = "company_name"
 
 
 def _extract_one(doc: SourceDoc, template: str) -> list[dict]:
@@ -397,9 +397,19 @@ def _write_filter_cache(
     )
 
 
+def _sop_identifier_block(sop_name: str, sop_description: str) -> str:
+    lines = []
+    if sop_name:
+        lines.append(f"Name: {sop_name}")
+    if sop_description:
+        lines.append(f"Description: {sop_description}")
+    return "\n".join(lines)
+
+
 def filter_by_sop(
     statements: list[dict],
     sop_name: str,
+    sop_description: str = "",
     cache_dir: Path | None = None,
     force: bool = False,
 ) -> list[dict]:
@@ -407,7 +417,8 @@ def filter_by_sop(
 
     A single input folder can mix material from several distinct processes; this lets a
     run scope itself to one of them before reconcile/synthesize see the statements. With
-    no sop_name, this is a no-op — every statement passes through unchanged.
+    neither sop_name nor sop_description, this is a no-op — every statement passes through
+    unchanged.
 
     The model is asked to return the indices to keep, not to re-emit statement objects:
     statement shapes vary (FolderStatement adds source/supporting_media on top of
@@ -416,14 +427,14 @@ def filter_by_sop(
     the actual filtering judgment in the prompt while the indexing is deterministic glue.
 
     If cache_dir is given, skip the LLM call when both the statement set and the filter
-    prompt+sop_name are unchanged since the last filter run (pass force=True to bypass).
+    prompt+sop_name+sop_description are unchanged since the last filter run (pass
+    force=True to bypass).
     """
-    if not sop_name:
-        return statements
 
     template = load_prompt("02b_filter_by_sop.md")
+    prompt_key = template + sop_name + sop_description
     if not force and cache_dir is not None:
-        cached = _cached_filtered(cache_dir, statements, template + sop_name)
+        cached = _cached_filtered(cache_dir, statements, prompt_key)
         if cached is not None:
             print("  filter: cached (unchanged)")
             return cached
@@ -439,7 +450,7 @@ def filter_by_sop(
     ]
     prompt = render(
         template,
-        SOP_NAME=sop_name,
+        SOP_IDENTIFIER=_sop_identifier_block(sop_name, sop_description),
         STATEMENTS_JSON=json.dumps(indexed, ensure_ascii=False, indent=2),
     )
     raw = llm.complete(
@@ -454,7 +465,7 @@ def filter_by_sop(
         statements[index] for index in keep_indices if 0 <= index < len(statements)
     ]
     if cache_dir is not None:
-        _write_filter_cache(cache_dir, statements, template + sop_name, filtered)
+        _write_filter_cache(cache_dir, statements, prompt_key, filtered)
     return filtered
 
 
@@ -664,6 +675,15 @@ def _slugify(heading_text: str) -> str:
     '#1-document-control--metadata' where a '/' was removed between two spaces.
     """
     return _NON_SLUG_RE.sub("", heading_text.lower()).replace(" ", "-")
+
+
+_NON_SLUG_CHARS_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _sop_name_slug(sop_name: str, max_length: int = 20) -> str:
+    """Filesystem-safe fragment for the output filename (sop_<slug>.md)."""
+    slug = _NON_SLUG_CHARS_RE.sub("_", sop_name.lower()).strip("_")
+    return slug[:max_length].rstrip("_")
 
 
 _LEVEL2_HEADING_RE = re.compile(r"^## (.+)$", re.MULTILINE)
@@ -1094,6 +1114,7 @@ def run(
     force_extract: bool = False,
     sop_path: Path | None = None,
     sop_name: str = "",
+    sop_description: str = "",
 ) -> Path:
     """Full generation: inputs/ -> out/sop_generated.md (+ extraction + gap report).
 
@@ -1102,9 +1123,11 @@ def run(
     content is added to the gap-audit corpus so facts carried over from it are not flagged
     as hallucinations.
 
-    `sop_name`, when given (e.g. "PFML process"), scopes the run to one SOP: statements
-    are filtered down to that SOP before reconcile/synthesize see them (see
-    `filter_by_sop`). With no sop_name, every extracted statement is used, unchanged.
+    `sop_name` and/or `sop_description`, when given (e.g. sop_name="PFML process"), scope
+    the run to one SOP: statements are filtered down to that SOP before reconcile/synthesize
+    see them (see `filter_by_sop`). With neither given, every extracted statement is used,
+    unchanged. When `sop_name` is given, the output is written to `out/sop_<slug>.md`
+    instead of `out/sop_generated.md`.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     existing_sop = sop_path.read_text(encoding="utf-8") if sop_path else ""
@@ -1122,11 +1145,12 @@ def run(
         json.dumps(statements, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-    if sop_name:
-        print(f"Filtering statements for SOP: {sop_name!r}...")
+    if sop_name or sop_description:
+        print(f"Filtering statements for SOP: {(sop_name or sop_description)!r}...")
         statements = filter_by_sop(
             statements,
             sop_name,
+            sop_description,
             cache_dir=out_dir / "extraction_cache",
             force=force_extract,
         )
@@ -1160,7 +1184,10 @@ def run(
         existing_sop_name=sop_path.name if sop_path else "",
         new_input_names=[d.name for d in docs],
     )
-    sop_path = out_dir / "sop_generated.md"
+    sop_filename = (
+        f"sop_{_sop_name_slug(sop_name)}.md" if sop_name else "sop_generated.md"
+    )
+    sop_path = out_dir / sop_filename
     sop_path.write_text(sop_md + "\n", encoding="utf-8")
 
     print("Auditing for hallucinations / missing gaps...")

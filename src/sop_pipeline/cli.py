@@ -34,6 +34,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
         force_extract=args.force_extract,
         sop_path=sop_path,
         sop_name=args.sop_name,
+        sop_description=args.sop_description,
     )
 
 
@@ -63,7 +64,9 @@ def main() -> None:
     )
     p_mocks.add_argument("--inputs", default=str(INPUTS))
     p_mocks.add_argument(
-        "--north-star", required=True, help="path to the trusted north-star SOP (not tracked in the repo)"
+        "--north-star",
+        required=True,
+        help="path to the trusted north-star SOP (not tracked in the repo)",
     )
     p_mocks.add_argument("--manifest", default=str(MANIFEST))
     p_mocks.set_defaults(func=_cmd_generate_mocks)
@@ -88,9 +91,19 @@ def main() -> None:
         "--sop-name",
         default="",
         help=(
-            'name of the SOP to build (e.g. "PFML process"); filters extracted '
-            "statements to only those relevant to it. Omit to use every extracted "
-            "statement (no filtering)."
+            'short name of the SOP to build (e.g. "PFML process"); filters extracted '
+            "statements to only those relevant to it, and names the output "
+            '"sop_<slug of this>.md". Omit (with --sop-description also omitted) to use '
+            "every extracted statement and write out/sop_generated.md."
+        ),
+    )
+    p_run.add_argument(
+        "--sop-description",
+        default="",
+        help=(
+            "longer description of the SOP to build, giving the filtering step more "
+            "context than --sop-name alone. Either flag on its own is enough to trigger "
+            "filtering."
         ),
     )
     p_run.set_defaults(func=_cmd_run)
@@ -101,7 +114,9 @@ def main() -> None:
     p_eval.add_argument("--sop", default=str(OUT / "sop_generated.md"))
     p_eval.add_argument("--out", default=str(OUT))
     p_eval.add_argument(
-        "--north-star", required=True, help="path to the trusted north-star SOP (not tracked in the repo)"
+        "--north-star",
+        required=True,
+        help="path to the trusted north-star SOP (not tracked in the repo)",
     )
     p_eval.add_argument("--manifest", default=str(MANIFEST))
     p_eval.set_defaults(func=_cmd_evaluate)
