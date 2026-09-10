@@ -35,6 +35,10 @@ uv run sop-pipeline generate-mocks --north-star path/to/sop_north_star.md
 # 2. generate an SOP from whatever is in inputs/  ->  out/sop_generated.md
 uv run sop-pipeline run --inputs inputs/ --schema-guide path/to/sop_template_guide.md
 
+# 2b. revise an existing SOP instead: new inputs fill its gaps, untouched content carries over
+uv run sop-pipeline run --inputs inputs/ --schema-guide path/to/sop_template_guide.md \
+  --sop out/sop_generated.md
+
 # 3. (dev only) score the generated SOP against that same north-star reference
 uv run sop-pipeline evaluate --sop out/sop_generated.md --north-star path/to/sop_north_star.md
 ```
@@ -97,11 +101,15 @@ flowchart TD
     end
 
     subgraph SOPINITSYN["SOP initial synthetization"]
+        STMTS --> OLD_SOP
+        %% link above doesn't exist in the pipeline, added only for nicer rendering (see linkStyle 8 below)
         STMTS --> RECON{4. Reconcile — cross-file conflict check}
+        OLD_SOP[old_sop.md] --> RECON
         RECON --> CONF[(conflicts.json)]
 
         STMTS --> SYN{5. Synthesize SOP}
         CONF --> SYN
+        OLD_SOP[old_sop.md] --> SYN
         GUIDE[sop_template.json] --> SYN
     end
 
@@ -126,6 +134,7 @@ flowchart TD
     end
 
     style SOP2 fill:#2ecc71,stroke:#1e8449,color:#000000
+    linkStyle 8 opacity:0
 ```
 
 - **Facts are extracted** in step 3 (`EXTRACT_TEXT` / `EXTRACT_VIDEO`), one source file at a time — each statement carries its source, a verbatim quote, and a confidence level. Recordings go through the video module, whose chosen strategy decides how the file is turned into statements; the rest of the pipeline is identical either way.

@@ -24,11 +24,15 @@ def _cmd_run(args: argparse.Namespace) -> None:
     schema_guide_path = Path(args.schema_guide)
     if not schema_guide_path.is_file():
         raise SystemExit(f"Schema guide not found: {schema_guide_path}")
+    sop_path = Path(args.sop) if args.sop else None
+    if sop_path is not None and not sop_path.is_file():
+        raise SystemExit(f"Existing SOP not found: {sop_path}")
     pipeline.run(
         Path(args.inputs),
         Path(args.out),
         schema_guide_path,
         force_extract=args.force_extract,
+        sop_path=sop_path,
     )
 
 
@@ -75,6 +79,9 @@ def main() -> None:
         "--force-extract",
         action="store_true",
         help="bypass the extraction cache and re-extract every file",
+    )
+    p_run.add_argument(
+        "--sop", help="path to an existing SOP to revise; the new inputs fill its gaps"
     )
     p_run.set_defaults(func=_cmd_run)
 

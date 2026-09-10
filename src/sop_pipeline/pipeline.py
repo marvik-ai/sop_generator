@@ -396,7 +396,10 @@ def _write_reconcile_cache(
 
 
 def reconcile(
-    statements: list[dict], cache_dir: Path | None = None, force: bool = False
+    statements: list[dict],
+    cache_dir: Path | None = None,
+    force: bool = False,
+    existing_sop: str = "",
 ) -> list[dict]:
     """Reduce step: compare statements across ALL sources and flag value-conflicts.
 
@@ -408,16 +411,23 @@ def reconcile(
     If cache_dir is given, skip the LLM call when both the statement set and the reconcile
     prompt are unchanged since the last reconciliation (pass force=True to bypass). Editing
     07_reconcile.md changes the cache key, so the cache is rebuilt automatically.
+
+    `existing_sop`, when given, appends the `07b_reconcile_with_sop.md` overlay so the old
+    SOP's confident assertions are also compared against the new statements.
     """
     template = load_prompt("07_reconcile.md")
+    if existing_sop:
+        template += "\n\n" + load_prompt("07b_reconcile_with_sop.md")
     if not force and cache_dir is not None:
-        cached = _cached_conflicts(cache_dir, statements, template)
+        cached = _cached_conflicts(cache_dir, statements, template + existing_sop)
         if cached is not None:
             print("  reconcile: cached (unchanged)")
             return cached
 
     prompt = render(
-        template, STATEMENTS_JSON=json.dumps(statements, ensure_ascii=False, indent=2)
+        template,
+        STATEMENTS_JSON=json.dumps(statements, ensure_ascii=False, indent=2),
+        EXISTING_SOP=existing_sop,
     )
     raw = llm.complete(
         prompt,
@@ -428,7 +438,9 @@ def reconcile(
     )
     conflicts = json.loads(raw)["conflicts"]
     if cache_dir is not None:
-        _write_reconcile_cache(cache_dir, statements, template, conflicts)
+        _write_reconcile_cache(
+            cache_dir, statements, template + existing_sop, conflicts
+        )
     return conflicts
 
 
@@ -437,15 +449,27 @@ def synthesize(
     schema_guide: str,
     conflicts: list[dict] | None = None,
     metadata: dict | None = None,
+    existing_sop: str = "",
+    existing_sop_name: str = "",
+    new_input_names: list[str] | None = None,
 ) -> str:
     """Synthesize the full SOP markdown from extracted statements + the schema guide.
 
     `conflicts` are cross-file disagreements from the reconcile stage; each must be
     rendered as an AMBIGUITY gap. `metadata` fills Section 1 document-control fields
     (run date, author, version, status) so they are never left as placeholders/gaps.
+
+    `existing_sop`, when given, appends the `03b_revise_existing_sop.md` overlay so the
+    model revises that SOP in place instead of writing a from-scratch one — with no SOP
+    this is a no-op and the base prompt reaches the model unchanged. `existing_sop_name`
+    and `new_input_names` tell that overlay what to cite in Section 1's "Source
+    documents" (the existing SOP file itself, not its own transitive source list, plus
+    this revision's new inputs).
     """
     metadata = metadata or {}
     template = load_prompt("03_synthesize_sop.md")
+    if existing_sop:
+        template += "\n\n" + load_prompt("03b_revise_existing_sop.md")
     prompt = render(
         template,
         SCHEMA_GUIDE=schema_guide,
@@ -454,6 +478,9 @@ def synthesize(
         RUN_DATE=metadata.get("run_date", "TBD"),
         AUTHOR=metadata.get("author", "TBD"),
         VERSION=metadata.get("version", "0.1 (draft)"),
+        EXISTING_SOP=existing_sop,
+        EXISTING_SOP_NAME=existing_sop_name,
+        NEW_INPUT_FILES=", ".join(new_input_names or []),
         STATUS=metadata.get("status", "Draft"),
     )
     return llm.complete(
@@ -565,6 +592,18 @@ def _table_of_contents(sop_md: str) -> str:
         else:
             lines.append(f"- [{heading_text}](#{slug})")
     return "\n".join(lines)
+
+
+_VERSION_NUM_RE = re.compile(r"(\d+)\.(\d+)")
+
+
+def _bump_version(version: str) -> str:
+    """Increment the minor version number by 1 (e.g. '0.1 (draft)' -> '0.2 (draft)')."""
+    match = _VERSION_NUM_RE.search(version)
+    if not match:
+        return version
+    major, minor = match.groups()
+    return _VERSION_NUM_RE.sub(f"{major}.{int(minor) + 1}", version, count=1)
 
 
 def _extract_section1_field(sop_md: str, label: str) -> str | None:
@@ -936,15 +975,42 @@ def evaluate(sop_md: str, north_star: str, manifest: str) -> str:
     ).strip()
 
 
+def _without_existing_sop(
+    docs: list[SourceDoc], inputs_dir: Path, sop_path: Path | None
+) -> list[SourceDoc]:
+    """Drop the --sop file from the corpus when it lives inside the inputs folder.
+
+    It is fed to reconcile and synthesize as the SOP being revised, so extracting it as
+    a raw document too would double-count every fact it already states. A SOP placed
+    inside a subdirectory of inputs/ is not excluded — a subdirectory is one folder-level
+    unit (see `ingest.load_corpus`), not individually addressable by file path.
+    """
+    if sop_path is None:
+        return docs
+    target = sop_path.resolve()
+    return [d for d in docs if (d.path or inputs_dir / d.name).resolve() != target]
+
+
 def run(
     inputs_dir: Path,
     out_dir: Path,
     schema_guide_path: Path,
     force_extract: bool = False,
+    sop_path: Path | None = None,
 ) -> Path:
-    """Full generation: inputs/ -> out/sop_generated.md (+ extraction + gap report)."""
+    """Full generation: inputs/ -> out/sop_generated.md (+ extraction + gap report).
+
+    `sop_path`, when given, switches the run onto the revision route: the SOP at that path
+    joins the pipeline at reconcile and synthesize as the document being revised, and its
+    content is added to the gap-audit corpus so facts carried over from it are not flagged
+    as hallucinations.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
-    docs = load_corpus(inputs_dir)
+    existing_sop = sop_path.read_text(encoding="utf-8") if sop_path else ""
+    docs = _without_existing_sop(load_corpus(inputs_dir), inputs_dir, sop_path)
+    audit_docs = docs + (
+        [SourceDoc(sop_path.name, existing_sop)] if existing_sop else []
+    )
     print(f"Loaded {len(docs)} input file(s).")
 
     print("Extracting statements...")
@@ -956,7 +1022,9 @@ def run(
     )
 
     print("Reconciling cross-file conflicts...")
-    conflicts = reconcile(statements, cache_dir=out_dir, force=force_extract)
+    conflicts = reconcile(
+        statements, cache_dir=out_dir, force=force_extract, existing_sop=existing_sop
+    )
     (out_dir / "conflicts.json").write_text(
         json.dumps(conflicts, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -965,17 +1033,24 @@ def run(
     print("Synthesizing SOP...")
     schema_guide = schema_guide_path.read_text(encoding="utf-8")
     metadata = llm.document_metadata()
+    if existing_sop:
+        old_version = _extract_section1_field(existing_sop, "Version")
+        if old_version:
+            metadata = {**metadata, "version": _bump_version(old_version)}
     sop_md = synthesize(
         statements,
         schema_guide,
         conflicts=conflicts,
         metadata=metadata,
+        existing_sop=existing_sop,
+        existing_sop_name=sop_path.name if sop_path else "",
+        new_input_names=[d.name for d in docs],
     )
     sop_path = out_dir / "sop_generated.md"
     sop_path.write_text(sop_md + "\n", encoding="utf-8")
 
     print("Auditing for hallucinations / missing gaps...")
-    report = gap_audit(sop_md, combined_corpus(docs))
+    report = gap_audit(sop_md, combined_corpus(audit_docs))
 
     print("Revising SOP from audit findings...")
     sop_md = revise(sop_md, report)

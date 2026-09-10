@@ -21,12 +21,17 @@ the repo.** All paths below are relative to `sop_pipeline/`.
   `--schema-guide <path>` to `run` (required — no default path, not tracked in the
   repo). It defines the 11 required sections + per-step block + typed Gaps Log; the
   synthesize prompt must follow it exactly.
+- **Two modes for `run`.** With no `--sop`, `run` writes a brand-new SOP from the inputs.
+  With `--sop <path>`, it revises that existing SOP instead: the new inputs' extracted
+  statements fill its gaps while untouched content and
+  unresolved gaps carry over unchanged.
 
 ## Commands
 ```bash
 uv sync
 uv run sop-pipeline generate-mocks --north-star <path>                        # dev: north star -> mock inputs + manifest
 uv run sop-pipeline run --inputs inputs/ --schema-guide <path>                # inputs/ -> out/sop_generated.md
+uv run sop-pipeline run --inputs inputs/ --schema-guide <path> --sop <path>   # revise an existing SOP with new inputs
 uv run sop-pipeline evaluate --north-star <path>                              # dev: score generated vs north star
 uv run ruff check . && uv run ruff format .
 ```
