@@ -258,14 +258,14 @@ def test_appendix_a_includes_total_and_invariants():
 
 def test_validation_warnings_md_groups_both_kinds():
     section = _validation_warnings_md(
-        ["Section 17 row G-03 is never referenced in the body."],
+        ["Section 12 row G-03 is never referenced in the body."],
         [
-            "End state 'Technical error' from Section 15 has no terminal node in the diagram."
+            "End state 'Technical error' from Section 11 has no terminal node in the diagram."
         ],
     )
     assert "## Deterministic validation warnings" in section
     assert "### Gap-ID & fork-branch checks" in section
-    assert "- Section 17 row G-03 is never referenced in the body." in section
+    assert "- Section 12 row G-03 is never referenced in the body." in section
     assert "### Flow-diagram parity (Annex 1)" in section
     assert "- End state 'Technical error'" in section
 

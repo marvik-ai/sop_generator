@@ -18,15 +18,15 @@ Check three things:
    leaves without a concrete value** (e.g. "Operational UI automation" with no specific UI
    screens/fields) must be a `MISSING-DETAIL` gap.
 
-3. **Gap quality.** For the gaps that ARE in Section 10: are they concrete, correctly
+3. **Gap quality.** For the gaps that ARE in Section 12: are they concrete, correctly
    typed, and actionable as questions for a reviewer? Note any that are vague or
    mistyped.
 
-Also confirm the structural basics: are all 11 sections present, does every step use the
+Also confirm the structural basics: are all 15 sections present, does every step use the
 block schema, is every decision written as IF/THEN, and are there any code/function/tool
 names (which are forbidden)?
 
-**Fork integrity (true bifurcations).** If Section 6 contains any fork block (a step
+**Fork integrity (true bifurcations).** If Section 7 contains any fork block (a step
 heading ending in `[DECISION]`), check each one: it names a single **Discriminator**; it
 names a **Reconverges at** target (a later step) or explicitly states the branches
 terminate independently; every branch has an `IF/THEN` selecting condition; every declared

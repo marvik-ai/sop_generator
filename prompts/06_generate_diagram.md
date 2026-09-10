@@ -7,16 +7,16 @@ step-by-step procedure and its exit points.
 ## Your single most important rule
 
 > **MIRROR, DON'T INVENT.** Build the diagram ONLY from what the SOP actually says. Every
-> node and every edge must trace to the SOP's Section 6 steps, their *Outcomes & routing* /
-> *Stop / exit conditions*, and the end states in Sections 5 and 9. Do NOT add steps,
+> node and every edge must trace to the SOP's Section 7 steps, their *Outcomes & routing* /
+> *Stop / exit conditions*, and the end states in Sections 6 and 11. Do NOT add steps,
 > branches, or outcomes the SOP does not describe.
 
 ## How to build it
 
-- Read **Section 6 (Step-by-step procedure)** and create exactly **one node per step**, in
+- Read **Section 7 (Step-by-step procedure)** and create exactly **one node per step**, in
   order, labeled `S1[Step 1 — <step name>]`, `S2[Step 2 — <step name>]`, etc. Use the step
-  numbers and names exactly as they appear in Section 6.
-- Add a single entry node `START([<trigger from Section 5>])` that flows into `S1`.
+  numbers and names exactly as they appear in Section 7.
+- Add a single entry node `START([<trigger from Section 6>])` that flows into `S1`.
 - For each step, read its **Outcomes & routing** and **Stop / exit conditions** and draw one
   labeled edge per branch: `Sn -->|<condition>| <target>`. Cover **every** branch, including
   the "otherwise" / stop branch — never collapse or omit one.
@@ -34,7 +34,7 @@ step-by-step procedure and its exit points.
     independently, point each to its terminal node instead. Still draw each sub-step's own
     **Outcomes & routing** branches (e.g. a sub-step routing to manual handling).
 - A branch that terminates points to a **terminal node**. Take terminal outcomes from the
-  SOP's **End-state catalog (Section 9)** and the end states in **Section 5**. Give each
+  SOP's **End-state catalog (Section 11)** and the end states in **Section 6**. Give each
   distinct end state one node id and **reuse that same id** wherever multiple steps route to
   it (e.g. several steps routing to manual handling share one node).
 - The edge label is the condition/outcome in short business language (e.g. `Applicable`,

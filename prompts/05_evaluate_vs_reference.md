@@ -26,7 +26,7 @@ that is expected, correct divergence, not a coverage miss (see the manifest cros
 rule in the Coverage-by-section section). 2–4 sentences of justification.
 
 ## Gap accuracy (score/100)
-Compare the generated SOP's Section 10 (and inline `[GAP G-xx]` tags) against the
+Compare the generated SOP's Section 12 (and inline `[GAP G-xx]` tags) against the
 manifest's "omitted across ALL inputs" list and per-file contradictions. Give a
 true-positive / false-negative / false-positive feel and a single 0–100 score, with a
 2–4 sentence justification. (The exhaustive per-gap trace goes in Part 2 — keep this
@@ -65,15 +65,17 @@ After the summary, begin this part with the literal heading
 
 ### Coverage by section
 
-One row per north-star SOP section, for sections **2 through 9** (skip 1 = metadata and
-11 = change log). Use this table:
+One row per north-star SOP section, for sections **2 through 11** (skip 1 = metadata;
+sections 12–15 — gaps log, change log, data sources, appendices — are not
+content-reconstruction sections). Use this table:
 
 | Section | Status | Generated SOP excerpt | North-star excerpt (if divergent) |
 |---|---|---|---|
 
-- **Section** — e.g. `2. Purpose & scope`, `3. Glossary`, `4. Systems & data sources`,
-  `5. Process overview`, `6. Step-by-step procedure`, `7. Business rules reference`,
-  `8. Error handling & exclusions`, `9. End-state catalog`.
+- **Section** — e.g. `2. Purpose & scope`, `3. Preconditions, Entry Points, Inputs &
+  Outputs`, `4. Glossary & key concepts`, `5. Systems & integrations`, `6. Process
+  overview`, `7. Step-by-step procedure`, `8. Error handling & exclusions`,
+  `9. Compliance & risk`, `10. Operational resilience`, `11. End-state catalog`.
 - **Status** — `Full` / `Partial` / `Missing`.
 - **Generated SOP excerpt** — a verbatim quote showing what the generated SOP produced
   for this section (or "—" if Missing).
@@ -106,7 +108,7 @@ each with a matching rule. Your gap-by-gap trace must reproduce the pre-verified
 for MF-01/MF-03/MF-04 unchanged and apply the MF-02 rule yourself. This is what keeps
 gap-accuracy scoring stable across runs.
 
-**MF-02 — worked positive case (do not under-credit).** A Section 10 gap (or its inline
+**MF-02 — worked positive case (do not under-credit).** A Section 12 gap (or its inline
 `[GAP G-xx]` anchor / Section 7 rule row) asking for the exact mapping or conditions of the
 **Applicability field/value in the rules database** — or, equivalently, how CUSTOM_SYSTEM
 Applicability values map to the buckets *Applicable / Not Applicable / Undetermined* —
@@ -145,7 +147,7 @@ against the manifest — content unique to the north star but absent from the in
 NOT appear as fact in the generated SOP), give:
 
 - **Generated SOP statement** — the exact quoted sentence, with its section/step
-  reference (e.g. "Section 6, Step 3").
+  reference (e.g. "Section 7, Step 3").
 - **Closest related source** — name the closest related input the SOP might have leaned
   on and quote it, OR write "no related source" if it appears wholly invented.
 - **Why unsupported** — one line on why this crosses from reasonable-inference into

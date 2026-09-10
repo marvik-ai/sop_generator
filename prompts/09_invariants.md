@@ -1,6 +1,7 @@
 You are extracting **cross-cutting invariants** from a finished SOP — assertions that
-hold for the whole run, independent of any single step, in the same spirit as Appendix A's
-per-step checkpoints but at the level of the entire process.
+hold for the whole run, independent of any single step, in the same spirit as each step's
+own Postcondition / Stop-exit-conditions checkpoints (Section 7) but at the level of the
+entire process.
 
 Your single most important rule:
 
@@ -31,7 +32,7 @@ Output ONLY a markdown subsection, nothing else (no preamble, no commentary):
 - Use IDs `INV-1`, `INV-2`, ... in the order you find them in the SOP.
 - Cap the table at 5 rows. If the SOP only supports fewer, output fewer — never pad with
   invented invariants to reach 5.
-- "Related gaps" cites an existing `G-xx` ID from the SOP's Section 10 if the invariant
+- "Related gaps" cites an existing `G-xx` ID from the SOP's Section 12 if the invariant
   touches an unconfirmed rule, otherwise `—`.
 - Each assertion must be phrased as a single verifiable statement, written the same way
   the SOP's own "Evaluation checkpoints" are phrased.
