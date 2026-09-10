@@ -129,6 +129,12 @@ flowchart TD
         GUIDE[sop_template.json] --> SYN
     end
 
+        FSTMTS --> SYN{5. Synthesize SOP}
+        CONF --> SYN
+        OLD_SOP[old_sop.md] --> SYN
+        GUIDE[sop_template.json] --> SYN
+    end
+
     SYN --> SOP1[(sop_generated.md draft — inline GAP tags + typed Section 12)]
 
     SOP1 --> AUDIT{6. Gap audit — self-critique vs raw corpus}
