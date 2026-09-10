@@ -33,6 +33,7 @@ def _cmd_run(args: argparse.Namespace) -> None:
         schema_guide_path,
         force_extract=args.force_extract,
         sop_path=sop_path,
+        sop_name=args.sop_name,
     )
 
 
@@ -82,6 +83,15 @@ def main() -> None:
     )
     p_run.add_argument(
         "--sop", help="path to an existing SOP to revise; the new inputs fill its gaps"
+    )
+    p_run.add_argument(
+        "--sop-name",
+        default="",
+        help=(
+            'name of the SOP to build (e.g. "PFML process"); filters extracted '
+            "statements to only those relevant to it. Omit to use every extracted "
+            "statement (no filtering)."
+        ),
     )
     p_run.set_defaults(func=_cmd_run)
 

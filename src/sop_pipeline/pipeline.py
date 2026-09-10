@@ -15,7 +15,7 @@ from pathlib import Path
 from . import llm, mermaid, video
 from .ingest import SourceDoc, combined_corpus, load_corpus
 from .prompts import load_prompt, render
-from .schema import DocExtraction, FolderExtraction, ReconcileOutput
+from .schema import DocExtraction, FilterOutput, FolderExtraction, ReconcileOutput
 from .validate import (
     validate_branches,
     validate_diagram,
@@ -357,9 +357,105 @@ def extract(
 
 
 def _statements_hash(statements: list[dict], prompt_text: str) -> str:
-    """Cache key for the reconcile stage: the statement set plus the reconcile prompt."""
+    """Cache key for a statement-set stage (filter/reconcile): the statements plus the
+    stage's prompt (and, for filter, the sop_name folded into prompt_text by the caller)."""
     canonical = json.dumps(statements, ensure_ascii=False, sort_keys=True)
     return _hash(prompt_text, canonical)
+
+
+def _filter_cache_path(cache_dir: Path) -> Path:
+    return cache_dir / "filter_cache.json"
+
+
+def _cached_filtered(
+    cache_dir: Path, statements: list[dict], prompt_text: str
+) -> list[dict] | None:
+    """Return cached filtered statements if neither the statements nor the filter
+    prompt+SOP name (folded into prompt_text by the caller) changed."""
+    path = _filter_cache_path(cache_dir)
+    if not path.is_file():
+        return None
+    try:
+        cached = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if cached.get("hash") != _statements_hash(statements, prompt_text):
+        return None
+    return cached.get("statements")
+
+
+def _write_filter_cache(
+    cache_dir: Path, statements: list[dict], prompt_text: str, filtered: list[dict]
+) -> None:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "hash": _statements_hash(statements, prompt_text),
+        "statements": filtered,
+    }
+    _filter_cache_path(cache_dir).write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def filter_by_sop(
+    statements: list[dict],
+    sop_name: str,
+    cache_dir: Path | None = None,
+    force: bool = False,
+) -> list[dict]:
+    """Keep only the statements relevant to the named SOP (e.g. "PFML process").
+
+    A single input folder can mix material from several distinct processes; this lets a
+    run scope itself to one of them before reconcile/synthesize see the statements. With
+    no sop_name, this is a no-op — every statement passes through unchanged.
+
+    The model is asked to return the indices to keep, not to re-emit statement objects:
+    statement shapes vary (FolderStatement adds source/supporting_media on top of
+    DocStatement) and round-tripping them through a strict output schema risks losing
+    those extra fields or letting the model reword a statement. Selecting by index keeps
+    the actual filtering judgment in the prompt while the indexing is deterministic glue.
+
+    If cache_dir is given, skip the LLM call when both the statement set and the filter
+    prompt+sop_name are unchanged since the last filter run (pass force=True to bypass).
+    """
+    if not sop_name:
+        return statements
+
+    template = load_prompt("02b_filter_by_sop.md")
+    if not force and cache_dir is not None:
+        cached = _cached_filtered(cache_dir, statements, template + sop_name)
+        if cached is not None:
+            print("  filter: cached (unchanged)")
+            return cached
+
+    indexed = [
+        {
+            "index": index,
+            "target_section": statement.get("target_section", ""),
+            "statement": statement.get("statement", ""),
+            "source": statement.get("source", ""),
+        }
+        for index, statement in enumerate(statements)
+    ]
+    prompt = render(
+        template,
+        SOP_NAME=sop_name,
+        STATEMENTS_JSON=json.dumps(indexed, ensure_ascii=False, indent=2),
+    )
+    raw = llm.complete(
+        prompt,
+        model=llm.judge_model(),
+        max_tokens=4000,
+        temperature=0,
+        response_format=FilterOutput.model_json_schema(),
+    )
+    keep_indices = json.loads(raw)["keep_indices"]
+    filtered = [
+        statements[index] for index in keep_indices if 0 <= index < len(statements)
+    ]
+    if cache_dir is not None:
+        _write_filter_cache(cache_dir, statements, template + sop_name, filtered)
+    return filtered
 
 
 def _reconcile_cache_path(cache_dir: Path) -> Path:
@@ -997,6 +1093,7 @@ def run(
     schema_guide_path: Path,
     force_extract: bool = False,
     sop_path: Path | None = None,
+    sop_name: str = "",
 ) -> Path:
     """Full generation: inputs/ -> out/sop_generated.md (+ extraction + gap report).
 
@@ -1004,6 +1101,10 @@ def run(
     joins the pipeline at reconcile and synthesize as the document being revised, and its
     content is added to the gap-audit corpus so facts carried over from it are not flagged
     as hallucinations.
+
+    `sop_name`, when given (e.g. "PFML process"), scopes the run to one SOP: statements
+    are filtered down to that SOP before reconcile/synthesize see them (see
+    `filter_by_sop`). With no sop_name, every extracted statement is used, unchanged.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     existing_sop = sop_path.read_text(encoding="utf-8") if sop_path else ""
@@ -1020,6 +1121,19 @@ def run(
     (out_dir / "extraction.json").write_text(
         json.dumps(statements, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+
+    if sop_name:
+        print(f"Filtering statements for SOP: {sop_name!r}...")
+        statements = filter_by_sop(
+            statements,
+            sop_name,
+            cache_dir=out_dir / "extraction_cache",
+            force=force_extract,
+        )
+        (out_dir / "filtered_statements.json").write_text(
+            json.dumps(statements, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        print(f"  kept {len(statements)} statement(s) for {sop_name!r}.")
 
     print("Reconciling cross-file conflicts...")
     conflicts = reconcile(
