@@ -25,6 +25,10 @@ the repo.** All paths below are relative to `sop_pipeline/`.
   With `--sop <path>`, it revises that existing SOP instead: the new inputs' extracted
   statements fill its gaps while untouched content and
   unresolved gaps carry over unchanged.
+- **`--sop-name` scopes a run to one SOP.** A folder of inputs can mix material from
+  several distinct processes; `--sop-name "<name>"` runs a filtering step (after extract,
+  before reconcile) that keeps only statements relevant to that named SOP. Optional — no
+  `--sop-name` means every extracted statement is used, unchanged.
 
 ## Commands
 ```bash
@@ -32,6 +36,7 @@ uv sync
 uv run sop-pipeline generate-mocks --north-star <path>                        # dev: north star -> mock inputs + manifest
 uv run sop-pipeline run --inputs inputs/ --schema-guide <path>                # inputs/ -> out/sop_generated.md
 uv run sop-pipeline run --inputs inputs/ --schema-guide <path> --sop <path>   # revise an existing SOP with new inputs
+uv run sop-pipeline run --inputs inputs/ --schema-guide <path> --sop-name "PFML process"  # scope to one SOP
 uv run sop-pipeline evaluate --north-star <path>                              # dev: score generated vs north star
 uv run ruff check . && uv run ruff format .
 ```
