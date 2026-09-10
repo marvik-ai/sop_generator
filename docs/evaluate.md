@@ -54,7 +54,7 @@ A concise top-level view:
   were correctly flagged because the mock inputs genuinely lacked that information —
   the goal is to reward accurate reconstruction, not punish honesty about limits.
 - **`## Gap accuracy (score/100)`** — a short TP/FN/FP feel and a single score (the
-  exhaustive per-gap trace lives in Part 2), comparing the generated SOP's Section 10
+  exhaustive per-gap trace lives in Part 2), comparing the generated SOP's Section 12
   (and inline `[GAP G-xx]` tags) against the manifest's "omitted across all inputs" list
   and the deliberate contradiction (the 5-day vs. 10-day duration-limit threshold).
 - **`## Hallucinations`** — a 1–3 sentence verdict (per-item detail lives in Part 2).

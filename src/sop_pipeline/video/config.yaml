@@ -11,7 +11,7 @@
 frame_extraction: uniform
 
 # Which video-to-facts (analysis) strategy runs: naive | sequential.
-strategy: naive
+strategy: sequential
 
 # --- shared by every frame-extraction strategy AND every analysis strategy ---
 shared:
@@ -20,6 +20,13 @@ shared:
   # Audio chunk length in seconds for transcription. Whisper rejects uploads over 25 MB;
   # 10 minutes (600s) of mono 16 kHz AAC is a few MB. Unrelated to sequential.chunk_s below.
   audio_chunk_s: 600.0
+  # Whether audio is extracted from the recording and sent to Whisper for transcription.
+  # Off by default, since Whisper (an OpenAI ASR call) isn't allowed in every
+  # environment. When off, each <video>.mp4 must have a same-named <video>.vtt next to
+  # it (e.g. an exported Teams meeting transcript), which is reformatted into the same
+  # "[mm:ss] text" shape Whisper would have produced. A missing sibling logs a warning
+  # and the recording is processed from its frames alone rather than failing the run.
+  allow_audio_extraction: false
   # Hard cap on frames sent to the model, applied AFTER frame extraction, regardless of
   # which frame_extraction strategy produced them. Over budget, every Nth frame is kept
   # (not just the first N) so the END of the procedure isn't dropped. null = no cap.

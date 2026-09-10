@@ -199,7 +199,7 @@ def _render_manifest() -> str:
         "",
         "Authored from the mock specs, not inferred from generated content. Use this to",
         "grade the pipeline: every 'omitted globally' item should surface as a typed gap",
-        "in the generated SOP's Section 10, and nothing outside these inputs should be",
+        "in the generated SOP's Section 12, and nothing outside these inputs should be",
         "asserted as fact.",
         "",
         "## Per-file coverage",

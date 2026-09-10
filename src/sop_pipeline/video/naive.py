@@ -45,8 +45,10 @@ def extract(path: Path, knobs: dict) -> list[dict]:
 
         chunk_s = float(knobs["audio_chunk_s"])
         text = transcribe.transcript(
-            media.extract_audio(path, work / "audio", chunk_s=chunk_s),
+            path,
+            work / "audio",
             chunk_s=chunk_s,
+            allow_audio_extraction=bool(knobs.get("allow_audio_extraction", False)),
         )
         prompt = render(
             load_prompt(PROMPT_NAME),

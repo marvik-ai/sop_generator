@@ -302,6 +302,8 @@ def test_probe_duration_raises_when_ffmpeg_is_missing(monkeypatch, tmp_path):
 
 
 def test_segments_are_shifted_onto_the_recordings_clock(monkeypatch, tmp_path):
+    chunks = [tmp_path / "audio_00000.m4a", tmp_path / "audio_00001.m4a"]
+    monkeypatch.setattr(transcribe.media, "extract_audio", lambda *_a, **_kw: chunks)
     monkeypatch.setattr(
         transcribe.llm,
         "transcribe",
@@ -311,13 +313,95 @@ def test_segments_are_shifted_onto_the_recordings_clock(monkeypatch, tmp_path):
         ],
     )
 
-    chunks = [tmp_path / "audio_00000.m4a", tmp_path / "audio_00001.m4a"]
-    lines = transcribe.transcript(chunks, chunk_s=600.0).splitlines()
+    lines = transcribe.transcript(
+        tmp_path / "demo.mp4",
+        tmp_path / "audio",
+        chunk_s=600.0,
+        allow_audio_extraction=True,
+    ).splitlines()
 
     assert lines[0] == "[00:05] line from audio_00000.m4a"
     # Chunk 2's local [00:05] must read as [10:05] on the recording's clock.
     assert lines[1] == "[10:05] line from audio_00001.m4a"
     assert len(lines) == 2
+
+
+# --- transcribe: .vtt fallback --------------------------------------------------
+
+
+_SAMPLE_VTT = """\
+WEBVTT
+
+c13e7a5c-c0f1-413b-821f-18925dfe30e0-0
+00:00:03.320 --> 00:00:11.880
+Let me explain why I don't believe this
+is a state, but let me see.
+
+458db06f-8bc7-47c5-8707-5cfec4f7ecb1-0
+00:00:12.320 --> 00:00:13.360
+Yeah, No, it's not.
+"""
+
+
+def test_parse_vtt_cues_joins_multiline_text_and_drops_ids_and_header():
+    cues = transcribe._parse_vtt_cues(_SAMPLE_VTT)
+    assert cues == [
+        (3.32, "Let me explain why I don't believe this is a state, but let me see."),
+        (12.32, "Yeah, No, it's not."),
+    ]
+
+
+def test_transcript_from_vtt_formats_like_whisper(tmp_path):
+    vtt_path = tmp_path / "demo.vtt"
+    vtt_path.write_text(_SAMPLE_VTT, encoding="utf-8")
+
+    text = transcribe._transcript_from_vtt(tmp_path / "demo.mp4")
+
+    assert text.splitlines() == [
+        "[00:03] Let me explain why I don't believe this is a state, but let me see.",
+        "[00:12] Yeah, No, it's not.",
+    ]
+
+
+def test_transcript_uses_the_sibling_vtt_and_skips_audio_extraction(
+    monkeypatch, tmp_path
+):
+    (tmp_path / "demo.vtt").write_text(_SAMPLE_VTT, encoding="utf-8")
+
+    def boom(*_args, **_kwargs):
+        raise AssertionError("audio must not be extracted when the knob is off")
+
+    monkeypatch.setattr(transcribe.media, "extract_audio", boom)
+
+    text = transcribe.transcript(
+        tmp_path / "demo.mp4",
+        tmp_path / "audio",
+        chunk_s=600.0,
+        allow_audio_extraction=False,
+    )
+
+    assert "Yeah, No, it's not." in text
+
+
+def test_transcript_from_vtt_warns_and_returns_empty_when_no_sibling_exists(
+    monkeypatch, tmp_path, caplog
+):
+    monkeypatch.setattr(
+        transcribe.media,
+        "extract_audio",
+        lambda *_a, **_kw: (_ for _ in ()).throw(AssertionError("must not run")),
+    )
+
+    with caplog.at_level("WARNING"):
+        text = transcribe.transcript(
+            tmp_path / "demo.mp4",
+            tmp_path / "audio",
+            chunk_s=600.0,
+            allow_audio_extraction=False,
+        )
+
+    assert text == ""
+    assert "demo.vtt" in caplog.text
 
 
 # --- frame_extraction: uniform ---------------------------------------------------
