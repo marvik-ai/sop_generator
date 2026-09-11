@@ -562,6 +562,8 @@ def synthesize(
     existing_sop: str = "",
     existing_sop_name: str = "",
     new_input_names: list[str] | None = None,
+    sop_name: str = "",
+    sop_description: str = "",
 ) -> str:
     """Synthesize the full SOP markdown from extracted statements + the schema guide.
 
@@ -575,6 +577,10 @@ def synthesize(
     and `new_input_names` tell that overlay what to cite in Section 1's "Source
     documents" (the existing SOP file itself, not its own transitive source list, plus
     this revision's new inputs).
+
+    `sop_name`/`sop_description`, when the run was scoped via `filter_by_sop`, are passed
+    through so the model titles/scopes the SOP consistently with what the filter step was
+    told; they are never a source of process facts.
     """
     metadata = metadata or {}
     template = load_prompt("03_synthesize_sop.md")
@@ -592,6 +598,7 @@ def synthesize(
         EXISTING_SOP_NAME=existing_sop_name,
         NEW_INPUT_FILES=", ".join(new_input_names or []),
         STATUS=metadata.get("status", "Draft"),
+        SOP_IDENTIFIER=_sop_identifier_block(sop_name, sop_description),
     )
     return llm.complete(
         prompt, model=llm.synth_model(), max_tokens=16384, temperature=0
@@ -1187,6 +1194,8 @@ def run(
         existing_sop=existing_sop,
         existing_sop_name=sop_path.name if sop_path else "",
         new_input_names=[d.name for d in docs],
+        sop_name=sop_name,
+        sop_description=sop_description,
     )
     sop_filename = (
         f"sop_{_sop_name_slug(sop_name)}.md" if sop_name else "sop_generated.md"

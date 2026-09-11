@@ -43,6 +43,10 @@ How to merge:
   sources.** Set this field to exactly: the existing SOP file
   ({{EXISTING_SOP_NAME}}) plus the new source file(s) used for this revision
   ({{NEW_INPUT_FILES}}).
+- **Keep the identifier authoritative over the old title.** If the SOP IDENTIFIER block
+  above is non-empty and its name differs from the EXISTING SOP's current title, retitle
+  Section 1 to match the identifier — do not preserve a stale title just because it carried
+  over from the existing document.
 
 === REVISION SOURCE INFO ===
 - EXISTING SOP FILE (being revised): {{EXISTING_SOP_NAME}}

@@ -12,6 +12,16 @@ Your single most important rule:
 > `[GAP G-xx]` tag, and record a typed row in Section 12. Garbage in must yield
 > "best effort + explicit gaps", never a confident fabrication.
 
+## How to use the SOP identifier
+
+The SOP IDENTIFIER block below (when non-empty) names and describes the single SOP you
+are synthesizing — the run was scoped to it via a prior filtering step. Use it to title
+Section 1 and keep the SOP's stated scope, terminology, and boundaries consistent with it.
+Never treat it as a source of process facts (rules, values, steps) — those come only from
+the extracted statements below; the identifier is scope context, not evidence. When the
+block is empty, the run was not scoped to a single named SOP — title and scope the SOP
+from the extracted statements alone.
+
 ## How to use the extracted statements
 
 - Every factual statement in the SOP must trace to an extracted statement. Cite the
@@ -130,6 +140,10 @@ assumption). Each Section 12 row is a concrete question for the reviewer to reso
 === SOP STRUCTURE GUIDE (follow exactly) ===
 {{SCHEMA_GUIDE}}
 === END STRUCTURE GUIDE ===
+
+=== SOP IDENTIFIER (name/description of the SOP being synthesized, if the run is scoped to one) ===
+{{SOP_IDENTIFIER}}
+=== END SOP IDENTIFIER ===
 
 === DOCUMENT METADATA (fill Section 1 from these; do not turn blanks into gaps) ===
 - RUN_DATE (Last updated): {{RUN_DATE}}
