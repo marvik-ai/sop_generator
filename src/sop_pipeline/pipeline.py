@@ -11,7 +11,6 @@ import hashlib
 import json
 import os
 import re
-import sys
 from pathlib import Path
 
 from . import llm, mermaid, video
@@ -27,46 +26,6 @@ from .validate import (
 
 
 SOP_TARGET_CUSTOMER = os.environ.get("SOP_TARGET_CUSTOMER", "MyAwesomeCompany")
-
-
-class _ProgressBar:
-    """A single sticky status line at the bottom of a run's output.
-
-    `log()` prints a normal line (it scrolls up like any other print); the bar itself is
-    only ever redrawn in place via `\r` + clear-to-end-of-line, never appended as a new
-    line, so only one bar is ever visible at a time.
-    """
-
-    def __init__(self, width: int = 20):
-        self._width = width
-        self._percent = 0
-        self._drawn = False
-
-    def _bar_text(self) -> str:
-        filled = round(self._width * self._percent / 100)
-        bar = "█" * filled + "░" * (self._width - filled)
-        return f"  [{bar}] {self._percent}%"
-
-    def _redraw(self) -> None:
-        sys.stdout.write(f"\r\033[K{self._bar_text()}")
-        sys.stdout.flush()
-        self._drawn = True
-
-    def log(self, message: str) -> None:
-        if self._drawn:
-            sys.stdout.write("\r\033[K")
-        print(message)
-        self._redraw()
-
-    def update(self, percent: int) -> None:
-        self._percent = percent
-        self._redraw()
-
-    def finish(self) -> None:
-        if self._drawn:
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-        self._drawn = False
 
 
 def _extract_one(doc: SourceDoc, template: str) -> list[dict]:
@@ -378,7 +337,6 @@ def extract(
     docs: list[SourceDoc],
     cache_dir: Path | None = None,
     force: bool = False,
-    bar: _ProgressBar | None = None,
 ) -> list[dict]:
     """Extract statements from every file and tag each with its source.
 
@@ -392,19 +350,13 @@ def extract(
     `_extract_folder`).
     """
     statements: list[dict] = []
-    total = len(docs)
-    for index, doc in enumerate(docs):
+    for doc in docs:
         found, cached = _extract_doc(doc, cache_dir, force)
         for statement in found:
             statement.setdefault("source", doc.name)
         statements.extend(found)
         suffix = " (cached, unchanged)" if cached else ""
-        message = f"  extracted {len(found)} statements from {doc.name}{suffix} ✅"
-        if bar is not None:
-            bar.log(message)
-            bar.update(round((index + 1) / total * 40) if total else 40)
-        else:
-            print(message)
+        print(f"  extracted {len(found)} statements from {doc.name}{suffix} ✅")
     return statements
 
 
@@ -1009,9 +961,7 @@ def _parser_feedback(error: str) -> str:
     )
 
 
-def build_diagram(
-    sop_md: str, out_dir: Path, bar: _ProgressBar | None = None
-) -> tuple[str, list[str]]:
+def build_diagram(sop_md: str, out_dir: Path) -> tuple[str, list[str]]:
     """Generate, validate (parse + render to SVG), and consistency-check the diagram.
 
     Validation uses the Mermaid CLI: a successful render is the parse check and also emits
@@ -1031,11 +981,7 @@ def build_diagram(
             "render. Install Node + @mermaid-js/mermaid-cli to enable them."
         )
     elif not result.ok:
-        message = "  diagram failed to parse; retrying once with the parser error..."
-        if bar is not None:
-            bar.log(message)
-        else:
-            print(message)
+        print("  diagram failed to parse; retrying once with the parser error...")
         mermaid_src = generate_diagram(
             sop_md, parser_feedback=_parser_feedback(result.error)
         )
@@ -1190,25 +1136,24 @@ def run(
     unchanged. When `sop_name` is given, the output is written to `out/sop_<slug>.md`
     instead of `out/sop_generated.md`.
     """
-    bar = _ProgressBar()
     out_dir.mkdir(parents=True, exist_ok=True)
     existing_sop = sop_path.read_text(encoding="utf-8") if sop_path else ""
     docs = _without_existing_sop(load_corpus(inputs_dir), inputs_dir, sop_path)
     audit_docs = docs + (
         [SourceDoc(sop_path.name, existing_sop)] if existing_sop else []
     )
-    bar.log(f"Loaded {len(docs)} input file(s).")
+    print(f"Loaded {len(docs)} input file(s).")
 
-    bar.log("========STATEMENT EXTRACTION========")
+    print("========STATEMENT EXTRACTION========")
     statements = extract(
-        docs, cache_dir=out_dir / "extraction_cache", force=force_extract, bar=bar
+        docs, cache_dir=out_dir / "extraction_cache", force=force_extract
     )
     (out_dir / "extraction.json").write_text(
         json.dumps(statements, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
     if sop_name or sop_description:
-        bar.log(f"Filtering statements for SOP: {(sop_name)!r}...")
+        print(f"Filtering statements for SOP: {(sop_name)!r}...")
         statements = filter_by_sop(
             statements,
             sop_name,
@@ -1219,19 +1164,19 @@ def run(
         (out_dir / "filtered_statements.json").write_text(
             json.dumps(statements, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        bar.log(f"  kept {len(statements)} statement(s) for {sop_name!r}.")
+        print(f"  kept {len(statements)} statement(s) for {sop_name!r}.")
 
-    bar.log("========SOP DRAFT GENERATION========")
-    bar.log("Reconciling cross-file conflicts...")
+    print("========SOP DRAFT GENERATION========")
+    print("Reconciling cross-file conflicts...")
     conflicts = reconcile(
         statements, cache_dir=out_dir, force=force_extract, existing_sop=existing_sop
     )
     (out_dir / "conflicts.json").write_text(
         json.dumps(conflicts, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    bar.log(f"  found {len(conflicts)} cross-file conflict(s). ✅")
+    print(f"  found {len(conflicts)} cross-file conflict(s). ✅")
 
-    bar.log("Synthesizing SOP...")
+    print("Synthesizing SOP...")
     schema_guide = schema_guide_path.read_text(encoding="utf-8")
     metadata = llm.document_metadata()
     if existing_sop:
@@ -1252,22 +1197,20 @@ def run(
     )
     sop_path = out_dir / sop_filename
     sop_path.write_text(sop_md + "\n", encoding="utf-8")
-    bar.log("  SOP draft created ✅")
-    bar.update(70)
+    print("  SOP draft created ✅")
 
-    bar.log("========SOP REFINEMENT========")
-    bar.log("Auditing for hallucinations / missing gaps...")
+    print("========SOP REFINEMENT========")
+    print("Auditing for hallucinations / missing gaps...")
     report = gap_audit(sop_md, combined_corpus(audit_docs))
     report_path = out_dir / "audit_report.md"
     report_path.write_text(report + "\n", encoding="utf-8")
-    bar.log(f"  audit report created at {report_path} ✅")
+    print(f"  audit report created at {report_path} ✅")
 
-    bar.log("Revising SOP from audit findings...")
+    print("Revising SOP from audit findings...")
     sop_md = revise(sop_md, report)
     sop_md = _normalize_section1(sop_md, metadata)
     sop_path.write_text(sop_md + "\n", encoding="utf-8")
-    bar.log("  revised SOP created ✅")
-    bar.update(90)
+    print("  revised SOP created ✅")
 
     structural_warnings = (
         validate_gap_ids(sop_md)
@@ -1275,14 +1218,14 @@ def run(
         + validate_systems_coverage(sop_md, statements)
     )
     for warning in structural_warnings:
-        bar.log(f"  WARNING: {warning}")
+        print(f"  WARNING: {warning}")
 
-    bar.log("========ANNEX CREATION========")
-    bar.log("Generating flow diagram...")
-    mermaid_src, diagram_warnings = build_diagram(sop_md, out_dir, bar=bar)
+    print("========ANNEX CREATION========")
+    print("Generating flow diagram...")
+    mermaid_src, diagram_warnings = build_diagram(sop_md, out_dir)
     for warning in diagram_warnings:
-        bar.log(f"  WARNING: {warning}")
-    bar.log("  flow diagram generated ✅")
+        print(f"  WARNING: {warning}")
+    print("  flow diagram generated ✅")
 
     # Persist the LLM audit + the deterministic validation warnings to one report. Written
     # here (not right after gap_audit) so the warnings computed above are included.
@@ -1306,19 +1249,17 @@ def run(
     )
     (out_dir / "sop_flow_diagram.mmd").write_text(mermaid_src + "\n", encoding="utf-8")
 
-    bar.log("Deriving cross-cutting invariants...")
+    print("Deriving cross-cutting invariants...")
     invariants_md = synthesize_invariants(sop_md)
     appendix = _appendix_a(_harvest_checkpoints(sop_md), invariants_md)
-    bar.log("  invariants derived ✅")
+    print("  invariants derived ✅")
 
-    bar.log("Assembling front matter + Table of Contents...")
+    print("Assembling front matter + Table of Contents...")
     front = _front_matter(sop_md, metadata)
     body_with_appendix = f"{body}{annex}\n\n---\n\n{appendix}\n"
     toc = _table_of_contents(body_with_appendix)
     final_sop = f"{front}\n\n---\n\n## Table of Contents\n\n{toc}\n\n---\n\n{body_with_appendix}"
     sop_path.write_text(final_sop, encoding="utf-8")
 
-    bar.update(100)
-    bar.log(f"Done -> {sop_path} ✅")
-    bar.finish()
+    print(f"Done -> {sop_path} ✅")
     return sop_path

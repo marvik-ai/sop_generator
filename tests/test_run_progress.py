@@ -1,8 +1,6 @@
-"""Unit test for the sticky progress bar + ✅ markers in `pipeline.run()`: no API, no
-mmdc — every LLM call and the diagram render are mocked, and the assertions only look at
-the plain-text `capsys` capture (see CLAUDE.md and the plan this test implements: the
-`\\r`/ANSI-clear control characters sit inertly between the real substrings, so `in` /
-`.index()` checks are unaffected).
+"""Unit test for the ✅-marked status prints in `pipeline.run()`: no API, no mmdc —
+every LLM call and the diagram render are mocked, and the assertions only look at the
+plain-text `capsys` capture.
 """
 
 from __future__ import annotations
@@ -42,9 +40,7 @@ def _fake_complete_queue(monkeypatch, responses: list[str]) -> list[str]:
     return remaining
 
 
-def test_run_marks_every_output_and_updates_the_bar_in_order(
-    monkeypatch, tmp_path, capsys
-):
+def test_run_marks_every_output_in_order(monkeypatch, tmp_path, capsys):
     inputs_dir = tmp_path / "inputs"
     inputs_dir.mkdir()
     (inputs_dir / "a.md").write_text("doc a body", encoding="utf-8")
@@ -102,11 +98,3 @@ def test_run_marks_every_output_and_updates_the_bar_in_order(
         f"Done -> {sop_path} ✅",
     ):
         assert line in out
-
-    # The progress checkpoints appear, in order: 20% and 40% (per-file, 2 docs), then the
-    # phase checkpoints 70%, 90%, 100%.
-    idx = -1
-    for checkpoint in ("20%", "40%", "70%", "90%", "100%"):
-        next_idx = out.index(checkpoint)
-        assert next_idx > idx
-        idx = next_idx
