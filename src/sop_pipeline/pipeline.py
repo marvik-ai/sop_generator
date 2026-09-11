@@ -594,7 +594,7 @@ def synthesize(
         STATUS=metadata.get("status", "Draft"),
     )
     return llm.complete(
-        prompt, model=llm.synth_model(), max_tokens=16384, temperature=0
+        prompt, model=llm.synth_model(), max_tokens=64000, temperature=0
     ).strip()
 
 
@@ -603,7 +603,7 @@ def revise(sop_md: str, audit_report: str) -> str:
     template = load_prompt("08_revise.md")
     prompt = render(template, SOP=sop_md, AUDIT=audit_report)
     return llm.complete(
-        prompt, model=llm.synth_model(), max_tokens=16384, temperature=0
+        prompt, model=llm.synth_model(), max_tokens=64000, temperature=0
     ).strip()
 
 
@@ -940,7 +940,7 @@ def generate_diagram(sop_md: str, parser_feedback: str = "") -> str:
     template = load_prompt("06_generate_diagram.md")
     prompt = render(template, SOP=sop_md, PARSER_FEEDBACK=parser_feedback)
     raw = llm.complete(
-        prompt, model=llm.synth_model(), max_tokens=4000, temperature=0
+        prompt, model=llm.synth_model(), max_tokens=8000, temperature=0
     ).strip()
     return _strip_code_fence(raw)
 
