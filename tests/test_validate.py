@@ -18,11 +18,11 @@ from sop_pipeline.validate import (
 # --- validate_systems_coverage ------------------------------------------------
 
 _SOP_WITH_SECTION4 = (
-    "## 4. Systems & data sources\n\n"
+    "## 5. Systems & data sources\n\n"
     "| System | What it is | Reads | Writes |\n|---|---|---|---|\n"
     "| CUSTOM_SYSTEM | Claims system of record | claim data | decisions |\n"
     "| Rules database | Stores business rules | rules | — |\n\n"
-    "## 5. Process overview\n\nbody\n"
+    "## 2. Process overview\n\nbody\n"
 )
 
 
@@ -81,7 +81,7 @@ def test_systems_coverage_noop_without_section4():
         },
     ]
     assert (
-        validate_systems_coverage("## 5. Process overview\n\nbody\n", statements) == []
+        validate_systems_coverage("## 2. Process overview\n\nbody\n", statements) == []
     )
 
 
@@ -91,9 +91,9 @@ def _sop(section1: str, body: str, section10_rows: str) -> str:
         "## 1. Document control / metadata\n\n"
         "| Field | Value |\n|---|---|\n"
         f"{section1}\n\n"
-        "## 6. Step-by-step procedure\n\n"
+        "## 8. Step-by-step procedure\n\n"
         f"{body}\n\n"
-        "## 10. Open questions & gaps log\n\n"
+        "## 17. Open questions & gaps log\n\n"
         "| Gap ID | Type | Step | Question | Owner | Status |\n"
         "|---|---|---|---|---|---|\n"
         f"{section10_rows}\n\n"
@@ -120,7 +120,7 @@ def test_duplicate_row_id_is_flagged():
         ),
     )
     warnings = validate_gap_ids(md)
-    assert any("more than one Section 10 row" in w for w in warnings)
+    assert any("more than one Section 17 row" in w for w in warnings)
 
 
 def test_inline_tag_without_row_is_flagged():
@@ -143,7 +143,7 @@ def test_orphan_row_never_referenced_is_flagged():
         ),
     )
     warnings = validate_gap_ids(md)
-    assert any("Section 10 row G-02 is never referenced" in w for w in warnings)
+    assert any("Section 17 row G-02 is never referenced" in w for w in warnings)
 
 
 def test_bare_gap_reference_counts_as_referenced():
@@ -194,7 +194,7 @@ _RECONV = (
 
 
 def _fork_sop(body: str) -> str:
-    return f"## 6. Step-by-step procedure\n\n{body}\n## 9. End-state catalog\n"
+    return f"## 8. Step-by-step procedure\n\n{body}\n## 15. End-state catalog\n"
 
 
 def test_no_fork_means_no_warnings():
@@ -237,7 +237,7 @@ def test_missing_reconvergence_step_is_flagged():
 # --- validate_diagram (diagram <-> SOP consistency) ---------------------------------
 
 _DIAGRAM_SOP = (
-    "## 6. Step-by-step procedure\n\n"
+    "## 8. Step-by-step procedure\n\n"
     "### Step 1 — Intake\n\n"
     "- **Decision logic / rules:**\n"
     "  - `IF` a new claim `THEN` continue to step 2.\n"
@@ -247,7 +247,7 @@ _DIAGRAM_SOP = (
     "  - `IF` applicable `THEN` approve.\n"
     "  - `IF` not applicable `THEN` exclude.\n"
     "- **Outcomes & routing:** approve or exclude.\n\n"
-    "## 9. End-state catalog\n\n"
+    "## 15. End-state catalog\n\n"
     "| End state | When reached | What is recorded |\n"
     "|---|---|---|\n"
     "| Approved & closed | all pass | notes |\n"
@@ -295,7 +295,7 @@ def test_invented_node_is_flagged():
     invented = _CLEAN_DIAGRAM + "    S2 --> S9[Step 9 — Ghost]\n"
     warnings = validate_diagram(_DIAGRAM_SOP, invented)
     assert any(
-        "S9 has no matching Section 6 step (invented node)" in w for w in warnings
+        "S9 has no matching Section 8 step (invented node)" in w for w in warnings
     )
 
 

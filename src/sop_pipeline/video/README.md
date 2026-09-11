@@ -152,14 +152,17 @@ the way to settle it on real material.
 | custom config (`SOP_VIDEO_CONFIG`) | Optional, lives anywhere: overrides a subset of `config.yaml`'s keys. |
 | `frame_extraction.py` | The frame-extraction axis: `Frame`, `uniform`/`difference`, the shared capping helper, `VideoProcessor`. |
 | `media.py` | ffmpeg: sample frames, split audio into ASR-sized chunks, probe a recording's duration. |
-| `transcribe.py` | Whisper per audio chunk → one `[mm:ss] text` transcript on the absolute clock. |
+| `transcribe.py` | Whisper per audio chunk, or a sibling `.vtt` transcript when audio extraction is off, → one `[mm:ss] text` transcript on the absolute clock. |
 | `schema.py` | Pydantic mirrors of what the prompts return (used as Structured Outputs schemas). |
 
 Knobs shared by every strategy, on both axes: `SOP_VIDEO_MODEL`, `SOP_TRANSCRIBE_MODEL`
 (both env vars, see `.env.example`), and, under `config.yaml`'s `shared:` section,
 `frame_width` (768 — where CUSTOM_SYSTEM field labels stay legible), `audio_chunk_s` (600.0 —
-bounds the ASR upload size only, unrelated to `sequential.chunk_s`), and `max_frames`
-(see above).
+bounds the ASR upload size only, unrelated to `sequential.chunk_s`), `max_frames`
+(see above), and `allow_audio_extraction` (`false` — Whisper isn't allowed in every
+environment; when off, `<video>.mp4` needs a same-named `<video>.vtt` next to it, e.g. an
+exported Teams meeting transcript, which is reformatted into the same transcript shape
+Whisper would have produced. A missing sibling only logs a warning, not a failure).
 
 ## Adding a strategy
 

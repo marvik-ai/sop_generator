@@ -24,7 +24,6 @@ from .validate import (
     validate_systems_coverage,
 )
 
-
 SOP_TARGET_CUSTOMER = os.environ.get("SOP_TARGET_CUSTOMER", "MyAwesomeCompany")
 
 
@@ -434,9 +433,6 @@ def filter_by_sop(
     prompt+sop_name+sop_description are unchanged since the last filter run (pass
     force=True to bypass).
     """
-
-    if not sop_name and not sop_description:
-        return statements
 
     template = load_prompt("02b_filter_by_sop.md")
     prompt_key = template + sop_name + sop_description
