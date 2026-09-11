@@ -22,6 +22,18 @@ _FIXTURES_VIDEOS_DIR = Path(__file__).resolve().parents[0] / "fixtures" / "video
 _load_dotenv()
 
 
+def _copy_video(video: Path, dest_dir: Path) -> None:
+    """Copy `video` into `dest_dir`, plus its sibling `.vtt` transcript if one exists.
+
+    `allow_audio_extraction` defaults to off, so a recording needs its `.vtt` alongside
+    it to be transcribed at all.
+    """
+    shutil.copy(video, dest_dir / video.name)
+    vtt = video.with_suffix(".vtt")
+    if vtt.is_file():
+        shutil.copy(vtt, dest_dir / vtt.name)
+
+
 def test_extract_from_a_single_document():
     docs = [
         d for d in load_corpus(_INPUTS_DIR) if d.name == "doc_01_functional_overview.md"
@@ -45,7 +57,7 @@ def test_extract_from_one_video(tmp_path):
     assert len(videos) > 0, "No videos found in fixtures"
 
     first_video = videos[0]
-    shutil.copy(first_video, tmp_path / first_video.name)
+    _copy_video(first_video, tmp_path)
 
     docs = load_corpus(tmp_path)
 
@@ -70,7 +82,7 @@ def test_extract_from_one_video_with_the_sequential_strategy(tmp_path, monkeypat
     assert len(videos) > 0, "No videos found in fixtures"
 
     first_video = videos[0]
-    shutil.copy(first_video, tmp_path / first_video.name)
+    _copy_video(first_video, tmp_path)
 
     docs = load_corpus(tmp_path)
 
@@ -84,7 +96,7 @@ def test_extract_from_one_video_one_text(tmp_path):
     assert len(videos) > 0, "No videos found in fixtures"
 
     first_video = videos[0]
-    shutil.copy(first_video, tmp_path / first_video.name)
+    _copy_video(first_video, tmp_path)
 
     text_file = _INPUTS_DIR / "doc_01_functional_overview.md"
     assert text_file.exists(), f"Text file not found: {text_file}"
@@ -104,7 +116,7 @@ def test_extract_from_a_folder_of_related_documents(tmp_path):
     first_video = videos[0]
     session = tmp_path / "session_a"
     session.mkdir()
-    shutil.copy(first_video, session / first_video.name)
+    _copy_video(first_video, session)
     for name in ("transcript_01_clean_overview.md", "doc_01_functional_overview.md"):
         text_file = _INPUTS_DIR / name
         assert text_file.exists(), f"Text file not found: {text_file}"
@@ -143,8 +155,7 @@ def _mentions(statement: dict, *needles: str) -> bool:
 
 
 def test_extract_from_a_folder_whose_documents_disagree(tmp_path):
-    """Two documents in one folder giving different values -> BOTH versions survive.
-    """
+    """Two documents in one folder giving different values -> BOTH versions survive."""
     session = tmp_path / "session_a"
     session.mkdir()
     for name in (

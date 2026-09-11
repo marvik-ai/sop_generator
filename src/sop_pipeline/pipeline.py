@@ -15,7 +15,7 @@ from pathlib import Path
 from . import llm, mermaid, video
 from .ingest import SourceDoc, combined_corpus, load_corpus
 from .prompts import load_prompt, render
-from .schema import DocExtraction, FolderExtraction, ReconcileOutput
+from .schema import DocExtraction, FilterOutput, FolderExtraction, ReconcileOutput
 from .validate import (
     validate_branches,
     validate_diagram,
@@ -23,7 +23,7 @@ from .validate import (
     validate_systems_coverage,
 )
 
-COMPANY_NAME="company_name"
+COMPANY_NAME = "company_name"
 
 
 def _extract_one(doc: SourceDoc, template: str) -> list[dict]:
@@ -357,9 +357,116 @@ def extract(
 
 
 def _statements_hash(statements: list[dict], prompt_text: str) -> str:
-    """Cache key for the reconcile stage: the statement set plus the reconcile prompt."""
+    """Cache key for a statement-set stage (filter/reconcile): the statements plus the
+    stage's prompt (and, for filter, the sop_name folded into prompt_text by the caller)."""
     canonical = json.dumps(statements, ensure_ascii=False, sort_keys=True)
     return _hash(prompt_text, canonical)
+
+
+def _filter_cache_path(cache_dir: Path) -> Path:
+    return cache_dir / "filter_cache.json"
+
+
+def _cached_filtered(
+    cache_dir: Path, statements: list[dict], prompt_text: str
+) -> list[dict] | None:
+    """Return cached filtered statements if neither the statements nor the filter
+    prompt+SOP name (folded into prompt_text by the caller) changed."""
+    path = _filter_cache_path(cache_dir)
+    if not path.is_file():
+        return None
+    try:
+        cached = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if cached.get("hash") != _statements_hash(statements, prompt_text):
+        return None
+    return cached.get("statements")
+
+
+def _write_filter_cache(
+    cache_dir: Path, statements: list[dict], prompt_text: str, filtered: list[dict]
+) -> None:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "hash": _statements_hash(statements, prompt_text),
+        "statements": filtered,
+    }
+    _filter_cache_path(cache_dir).write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
+def _sop_identifier_block(sop_name: str, sop_description: str) -> str:
+    lines = []
+    if sop_name:
+        lines.append(f"Name: {sop_name}")
+    if sop_description:
+        lines.append(f"Description: {sop_description}")
+    return "\n".join(lines)
+
+
+def filter_by_sop(
+    statements: list[dict],
+    sop_name: str,
+    sop_description: str = "",
+    cache_dir: Path | None = None,
+    force: bool = False,
+) -> list[dict]:
+    """Keep only the statements relevant to the named SOP (e.g. "PFML process").
+
+    A single input folder can mix material from several distinct processes; this lets a
+    run scope itself to one of them before reconcile/synthesize see the statements. With
+    neither sop_name nor sop_description, this is a no-op — every statement passes through
+    unchanged.
+
+    The model is asked to return the indices to keep, not to re-emit statement objects:
+    statement shapes vary (FolderStatement adds source/supporting_media on top of
+    DocStatement) and round-tripping them through a strict output schema risks losing
+    those extra fields or letting the model reword a statement. Selecting by index keeps
+    the actual filtering judgment in the prompt while the indexing is deterministic glue.
+
+    If cache_dir is given, skip the LLM call when both the statement set and the filter
+    prompt+sop_name+sop_description are unchanged since the last filter run (pass
+    force=True to bypass).
+    """
+
+    template = load_prompt("02b_filter_by_sop.md")
+    prompt_key = template + sop_name + sop_description
+    if not force and cache_dir is not None:
+        cached = _cached_filtered(cache_dir, statements, prompt_key)
+        if cached is not None:
+            print("  filter: cached (unchanged)")
+            return cached
+
+    indexed = [
+        {
+            "index": index,
+            "target_section": statement.get("target_section", ""),
+            "statement": statement.get("statement", ""),
+            "source": statement.get("source", ""),
+        }
+        for index, statement in enumerate(statements)
+    ]
+    prompt = render(
+        template,
+        SOP_IDENTIFIER=_sop_identifier_block(sop_name, sop_description),
+        STATEMENTS_JSON=json.dumps(indexed, ensure_ascii=False, indent=2),
+    )
+    raw = llm.complete(
+        prompt,
+        model=llm.judge_model(),
+        max_tokens=4000,
+        temperature=0,
+        response_format=FilterOutput.model_json_schema(),
+    )
+    keep_indices = json.loads(raw)["keep_indices"]
+    filtered = [
+        statements[index] for index in keep_indices if 0 <= index < len(statements)
+    ]
+    if cache_dir is not None:
+        _write_filter_cache(cache_dir, statements, prompt_key, filtered)
+    return filtered
 
 
 def _reconcile_cache_path(cache_dir: Path) -> Path:
@@ -396,7 +503,10 @@ def _write_reconcile_cache(
 
 
 def reconcile(
-    statements: list[dict], cache_dir: Path | None = None, force: bool = False
+    statements: list[dict],
+    cache_dir: Path | None = None,
+    force: bool = False,
+    existing_sop: str = "",
 ) -> list[dict]:
     """Reduce step: compare statements across ALL sources and flag value-conflicts.
 
@@ -408,16 +518,23 @@ def reconcile(
     If cache_dir is given, skip the LLM call when both the statement set and the reconcile
     prompt are unchanged since the last reconciliation (pass force=True to bypass). Editing
     07_reconcile.md changes the cache key, so the cache is rebuilt automatically.
+
+    `existing_sop`, when given, appends the `07b_reconcile_with_sop.md` overlay so the old
+    SOP's confident assertions are also compared against the new statements.
     """
     template = load_prompt("07_reconcile.md")
+    if existing_sop:
+        template += "\n\n" + load_prompt("07b_reconcile_with_sop.md")
     if not force and cache_dir is not None:
-        cached = _cached_conflicts(cache_dir, statements, template)
+        cached = _cached_conflicts(cache_dir, statements, template + existing_sop)
         if cached is not None:
             print("  reconcile: cached (unchanged)")
             return cached
 
     prompt = render(
-        template, STATEMENTS_JSON=json.dumps(statements, ensure_ascii=False, indent=2)
+        template,
+        STATEMENTS_JSON=json.dumps(statements, ensure_ascii=False, indent=2),
+        EXISTING_SOP=existing_sop,
     )
     raw = llm.complete(
         prompt,
@@ -428,7 +545,9 @@ def reconcile(
     )
     conflicts = json.loads(raw)["conflicts"]
     if cache_dir is not None:
-        _write_reconcile_cache(cache_dir, statements, template, conflicts)
+        _write_reconcile_cache(
+            cache_dir, statements, template + existing_sop, conflicts
+        )
     return conflicts
 
 
@@ -437,15 +556,27 @@ def synthesize(
     schema_guide: str,
     conflicts: list[dict] | None = None,
     metadata: dict | None = None,
+    existing_sop: str = "",
+    existing_sop_name: str = "",
+    new_input_names: list[str] | None = None,
 ) -> str:
     """Synthesize the full SOP markdown from extracted statements + the schema guide.
 
     `conflicts` are cross-file disagreements from the reconcile stage; each must be
     rendered as an AMBIGUITY gap. `metadata` fills Section 1 document-control fields
     (run date, author, version, status) so they are never left as placeholders/gaps.
+
+    `existing_sop`, when given, appends the `03b_revise_existing_sop.md` overlay so the
+    model revises that SOP in place instead of writing a from-scratch one — with no SOP
+    this is a no-op and the base prompt reaches the model unchanged. `existing_sop_name`
+    and `new_input_names` tell that overlay what to cite in Section 1's "Source
+    documents" (the existing SOP file itself, not its own transitive source list, plus
+    this revision's new inputs).
     """
     metadata = metadata or {}
     template = load_prompt("03_synthesize_sop.md")
+    if existing_sop:
+        template += "\n\n" + load_prompt("03b_revise_existing_sop.md")
     prompt = render(
         template,
         SCHEMA_GUIDE=schema_guide,
@@ -454,6 +585,9 @@ def synthesize(
         RUN_DATE=metadata.get("run_date", "TBD"),
         AUTHOR=metadata.get("author", "TBD"),
         VERSION=metadata.get("version", "0.1 (draft)"),
+        EXISTING_SOP=existing_sop,
+        EXISTING_SOP_NAME=existing_sop_name,
+        NEW_INPUT_FILES=", ".join(new_input_names or []),
         STATUS=metadata.get("status", "Draft"),
     )
     return llm.complete(
@@ -462,7 +596,7 @@ def synthesize(
 
 
 def revise(sop_md: str, audit_report: str) -> str:
-    """Patch the SOP in place using the gap-audit findings (Section 10 + inline tags)."""
+    """Patch the SOP in place using the gap-audit findings (Section 12 + inline tags)."""
     template = load_prompt("08_revise.md")
     prompt = render(template, SOP=sop_md, AUDIT=audit_report)
     return llm.complete(
@@ -543,6 +677,15 @@ def _slugify(heading_text: str) -> str:
     return _NON_SLUG_RE.sub("", heading_text.lower()).replace(" ", "-")
 
 
+_NON_SLUG_CHARS_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _sop_name_slug(sop_name: str, max_length: int = 20) -> str:
+    """Filesystem-safe fragment for the output filename (sop_<slug>.md)."""
+    slug = _NON_SLUG_CHARS_RE.sub("_", sop_name.lower()).strip("_")
+    return slug[:max_length].rstrip("_")
+
+
 _LEVEL2_HEADING_RE = re.compile(r"^## (.+)$", re.MULTILINE)
 _NUMBERED_HEADING_RE = re.compile(r"^(\d+)\.\s*(.+)$")
 
@@ -565,6 +708,18 @@ def _table_of_contents(sop_md: str) -> str:
         else:
             lines.append(f"- [{heading_text}](#{slug})")
     return "\n".join(lines)
+
+
+_VERSION_NUM_RE = re.compile(r"(\d+)\.(\d+)")
+
+
+def _bump_version(version: str) -> str:
+    """Increment the minor version number by 1 (e.g. '0.1 (draft)' -> '0.2 (draft)')."""
+    match = _VERSION_NUM_RE.search(version)
+    if not match:
+        return version
+    major, minor = match.groups()
+    return _VERSION_NUM_RE.sub(f"{major}.{int(minor) + 1}", version, count=1)
 
 
 def _extract_section1_field(sop_md: str, label: str) -> str | None:
@@ -592,7 +747,7 @@ _COMPLETENESS_NOTE = (
     "**Completeness note:** This is a draft that maps every known pathway this process "
     "can take. Many decision points depend on business rules that today live in a rules "
     "database or in customer-specific configuration and are not yet confirmed. Every "
-    "such hole is marked inline as `[GAP G-xx]` and listed in Section 10. The SOP will "
+    "such hole is marked inline as `[GAP G-xx]` and listed in Section 12. The SOP will "
     "be completed iteratively with the client; gaps are surfaced, never invented."
 )
 
@@ -644,7 +799,7 @@ def _checkpoint_scope(text: str) -> str:
 def _harvest_checkpoints(sop_md: str) -> list[dict]:
     """Pull each step's Evaluation-checkpoint bullets + related gap IDs.
 
-    Pure structural parse of the Section 6 step blocks (steps are real `### Step N — ...`
+    Pure structural parse of the Section 7 step blocks (steps are real `### Step N — ...`
     headings; see the synthesize prompt). Returns one dict per checkpoint:
     {"id": "STEP2-C1", "step": 2, "text": "...", "related_gaps": "G-05" | "—"}.
     """
@@ -702,7 +857,7 @@ def _harvest_checkpoints(sop_md: str) -> list[dict]:
 
 _APPENDIX_A_INTRO = (
     "This appendix is **not part of the original SOP body**. It consolidates every "
-    '"Evaluation checkpoint" from Section 6 into a single, individually-addressable list '
+    '"Evaluation checkpoint" from Section 7 into a single, individually-addressable list '
     "so an LLM-as-judge can score an agent's execution trace assertion-by-assertion. Each "
     "checkpoint carries a stable ID (`STEP<n>-C<m>`), the assertion to verify, a scope, "
     "and related gap IDs that may make the assertion unverifiable until the gap is closed."
@@ -768,13 +923,13 @@ def _diagram_advisory(diagram_warnings: list[str]) -> str:
         return ""
     return (
         '> ⚠️ This diagram is known to be incomplete — see the "Deterministic validation '
-        'warnings" section of gaps_report.md. Some declared IF/THEN branches and Section 9 '
+        'warnings" section of gaps_report.md. Some declared IF/THEN branches and Section 11 '
         "end states are not represented as edges/terminal nodes.\n\n"
     )
 
 
 def generate_diagram(sop_md: str, parser_feedback: str = "") -> str:
-    """Generate a Mermaid flowchart (TD) mirroring the SOP's Section 6 steps.
+    """Generate a Mermaid flowchart (TD) mirroring the SOP's Section 7 steps.
 
     `parser_feedback` is empty on the first attempt; on a retry it carries the previous
     Mermaid parser error so the model can fix the broken output (see build_diagram).
@@ -905,7 +1060,7 @@ def _check_manifest_rules(sop_md: str, manifest: str = "") -> str:
 
     lines = [
         "The table below is the output of a **deterministic Python keyword check** "
-        "against Section 10. These verdicts are computed from literal substring "
+        "against Section 12. These verdicts are computed from literal substring "
         "matches — they are FIXED. Copy them verbatim into the corresponding "
         "rows of your gap-by-gap trace table; do not change Matched Gap ID or Verdict "
         "for these rows.",
@@ -936,15 +1091,50 @@ def evaluate(sop_md: str, north_star: str, manifest: str) -> str:
     ).strip()
 
 
+def _without_existing_sop(
+    docs: list[SourceDoc], inputs_dir: Path, sop_path: Path | None
+) -> list[SourceDoc]:
+    """Drop the --sop file from the corpus when it lives inside the inputs folder.
+
+    It is fed to reconcile and synthesize as the SOP being revised, so extracting it as
+    a raw document too would double-count every fact it already states. A SOP placed
+    inside a subdirectory of inputs/ is not excluded — a subdirectory is one folder-level
+    unit (see `ingest.load_corpus`), not individually addressable by file path.
+    """
+    if sop_path is None:
+        return docs
+    target = sop_path.resolve()
+    return [d for d in docs if (d.path or inputs_dir / d.name).resolve() != target]
+
+
 def run(
     inputs_dir: Path,
     out_dir: Path,
     schema_guide_path: Path,
     force_extract: bool = False,
+    sop_path: Path | None = None,
+    sop_name: str = "",
+    sop_description: str = "",
 ) -> Path:
-    """Full generation: inputs/ -> out/sop_generated.md (+ extraction + gap report)."""
+    """Full generation: inputs/ -> out/sop_generated.md (+ extraction + gap report).
+
+    `sop_path`, when given, switches the run onto the revision route: the SOP at that path
+    joins the pipeline at reconcile and synthesize as the document being revised, and its
+    content is added to the gap-audit corpus so facts carried over from it are not flagged
+    as hallucinations.
+
+    `sop_name` and/or `sop_description`, when given (e.g. sop_name="PFML process"), scope
+    the run to one SOP: statements are filtered down to that SOP before reconcile/synthesize
+    see them (see `filter_by_sop`). With neither given, every extracted statement is used,
+    unchanged. When `sop_name` is given, the output is written to `out/sop_<slug>.md`
+    instead of `out/sop_generated.md`.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
-    docs = load_corpus(inputs_dir)
+    existing_sop = sop_path.read_text(encoding="utf-8") if sop_path else ""
+    docs = _without_existing_sop(load_corpus(inputs_dir), inputs_dir, sop_path)
+    audit_docs = docs + (
+        [SourceDoc(sop_path.name, existing_sop)] if existing_sop else []
+    )
     print(f"Loaded {len(docs)} input file(s).")
 
     print("Extracting statements...")
@@ -955,8 +1145,24 @@ def run(
         json.dumps(statements, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
+    if sop_name or sop_description:
+        print(f"Filtering statements for SOP: {(sop_name or sop_description)!r}...")
+        statements = filter_by_sop(
+            statements,
+            sop_name,
+            sop_description,
+            cache_dir=out_dir / "extraction_cache",
+            force=force_extract,
+        )
+        (out_dir / "filtered_statements.json").write_text(
+            json.dumps(statements, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        print(f"  kept {len(statements)} statement(s) for {sop_name!r}.")
+
     print("Reconciling cross-file conflicts...")
-    conflicts = reconcile(statements, cache_dir=out_dir, force=force_extract)
+    conflicts = reconcile(
+        statements, cache_dir=out_dir, force=force_extract, existing_sop=existing_sop
+    )
     (out_dir / "conflicts.json").write_text(
         json.dumps(conflicts, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -965,17 +1171,27 @@ def run(
     print("Synthesizing SOP...")
     schema_guide = schema_guide_path.read_text(encoding="utf-8")
     metadata = llm.document_metadata()
+    if existing_sop:
+        old_version = _extract_section1_field(existing_sop, "Version")
+        if old_version:
+            metadata = {**metadata, "version": _bump_version(old_version)}
     sop_md = synthesize(
         statements,
         schema_guide,
         conflicts=conflicts,
         metadata=metadata,
+        existing_sop=existing_sop,
+        existing_sop_name=sop_path.name if sop_path else "",
+        new_input_names=[d.name for d in docs],
     )
-    sop_path = out_dir / "sop_generated.md"
+    sop_filename = (
+        f"sop_{_sop_name_slug(sop_name)}.md" if sop_name else "sop_generated.md"
+    )
+    sop_path = out_dir / sop_filename
     sop_path.write_text(sop_md + "\n", encoding="utf-8")
 
     print("Auditing for hallucinations / missing gaps...")
-    report = gap_audit(sop_md, combined_corpus(docs))
+    report = gap_audit(sop_md, combined_corpus(audit_docs))
 
     print("Revising SOP from audit findings...")
     sop_md = revise(sop_md, report)

@@ -7,17 +7,17 @@ the audit requires a change.
 
 Apply ONLY these kinds of fixes, and only where the audit calls for them:
 - **Missing gaps:** add a new `[GAP G-xx]` tag inline at the relevant step AND a matching
-  typed row in Section 10 (Open questions & gaps log), worded as a concrete reviewer
+  typed row in Section 12 (Open questions & gaps log), worded as a concrete reviewer
   question. Use the gap type the audit recommends (`OPAQUE-RULE` / `MISSING-DETAIL` /
   `AMBIGUITY` / `ASSUMPTION`).
 - **Mistyped or vague gaps:** correct the type or sharpen the wording of an existing
-  Section 10 row (e.g. an `AMBIGUITY` that names both conflicting values and their source
+  Section 12 row (e.g. an `AMBIGUITY` that names both conflicting values and their source
   files instead of a vague "confirm the value").
 - **Unsupported assertions (hallucinations):** soften the claim to what the corpus
   supports and attach a gap, rather than deleting useful structure.
-- **Orphaned gaps:** every Section 10 row must be referenced by an inline `[GAP G-xx]` tag
-  somewhere in the body (the Section 6 step it affects, and/or its Section 7 business-rule
-  row). If a Section 10 row has no inline anchor, add the missing `[GAP G-xx]` tag at the
+- **Orphaned gaps:** every Section 12 row must be referenced by an inline `[GAP G-xx]` tag
+  somewhere in the body (the Section 7 step it affects, and/or its business-rule field). If
+  a Section 12 row has no inline anchor, add the missing `[GAP G-xx]` tag at the
   relevant step — without inventing new process content.
 
 Hard rules:

@@ -43,6 +43,14 @@ class DocExtraction(BaseModel):
     statements: list[DocStatement]
 
 
+class FilterOutput(BaseModel):
+    """The wrapped shape actually returned by the API (see `pipeline.filter_by_sop`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    keep_indices: list[int]
+
+
 GapType = Literal["OPAQUE-RULE", "MISSING-DETAIL", "AMBIGUITY", "ASSUMPTION"]
 
 

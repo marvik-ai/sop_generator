@@ -7,7 +7,7 @@ the repo.** All paths below are relative to `sop_pipeline/`.
 
 ## Critical rules
 - **Flag, don't hallucinate.** If a fact is missing/uncertain/contradictory, write the
-  best-known version + an inline `[GAP G-xx]` + a typed row in SOP Section 10. Never
+  best-known version + an inline `[GAP G-xx]` + a typed row in SOP Section 12. Never
   invent a rule to fill a hole.
 - **The pipeline logic lives in `prompts/`, not in Python.** `src/sop_pipeline/*.py` is
   thin glue (CLI, file IO, OpenAI calls, orchestration). Change behavior by editing
@@ -19,14 +19,24 @@ the repo.** All paths below are relative to `sop_pipeline/`.
   it (`generate-mocks` uses it only as background realism context).
 - **The schema guide drives output shape.** It is a user-supplied file passed via
   `--schema-guide <path>` to `run` (required — no default path, not tracked in the
-  repo). It defines the 11 required sections + per-step block + typed Gaps Log; the
+  repo). It defines the 15 required sections + per-step block + typed Gaps Log; the
   synthesize prompt must follow it exactly.
+- **Two modes for `run`.** With no `--sop`, `run` writes a brand-new SOP from the inputs.
+  With `--sop <path>`, it revises that existing SOP instead: the new inputs' extracted
+  statements fill its gaps while untouched content and
+  unresolved gaps carry over unchanged.
+- **`--sop-name` scopes a run to one SOP.** A folder of inputs can mix material from
+  several distinct processes; `--sop-name "<name>"` runs a filtering step (after extract,
+  before reconcile) that keeps only statements relevant to that named SOP. Optional — no
+  `--sop-name` means every extracted statement is used, unchanged.
 
 ## Commands
 ```bash
 uv sync
 uv run sop-pipeline generate-mocks --north-star <path>                        # dev: north star -> mock inputs + manifest
 uv run sop-pipeline run --inputs inputs/ --schema-guide <path>                # inputs/ -> out/sop_generated.md
+uv run sop-pipeline run --inputs inputs/ --schema-guide <path> --sop <path>   # revise an existing SOP with new inputs
+uv run sop-pipeline run --inputs inputs/ --schema-guide <path> --sop-name "PFML process"  # scope to one SOP
 uv run sop-pipeline evaluate --north-star <path>                              # dev: score generated vs north star
 uv run ruff check . && uv run ruff format .
 ```
@@ -42,4 +52,7 @@ uv run ruff check . && uv run ruff format .
 
 ## Gap types (from the schema guide)
 `OPAQUE-RULE` (logic hidden in a rules DB) · `MISSING-DETAIL` (sources don't say) ·
-`AMBIGUITY` (sources conflict) · `ASSUMPTION` (proceeded on an unconfirmed assumption).
+`AMBIGUITY` (sources conflict) · `ASSUMPTION` (proceeded on an unconfirmed assumption) ·
+`UNVERIFIED` (inherited claim neither confirmed nor contradicted) · `OUTDATED` (source
+contradicts current behavior) · `MISSING-ARTIFACT` (a document that should exist does
+not) · `PRODUCTION-READINESS` (documented but not fully live).

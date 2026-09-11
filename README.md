@@ -2,7 +2,7 @@
 
 A **self-contained** pipeline that takes a folder of inputs (meeting transcripts +
 supporting documents) and produces a structured **Standard Operating Procedure (SOP)**
-in markdown, following a fixed 11-section schema — and **flags gaps instead of
+in markdown, following a fixed 15-section schema — and **flags gaps instead of
 hallucinating** when the inputs are incomplete or contradictory.
 
 
@@ -15,7 +15,7 @@ do most of the drafting and **surface what's missing** in a structured Gaps sect
 so the BSA finishes a draft rather than starting from scratch.
 
 **Guiding principle — flag, don't hallucinate.** Garbage in → "best effort + explicit
-gaps", never invented rules. Every gap goes in one structured section (§10), not as
+gaps", never invented rules. Every gap goes in one structured section (§12), not as
 scattered inline comments.
 
 ## Setup
@@ -35,6 +35,14 @@ uv run sop-pipeline generate-mocks --north-star path/to/sop_north_star.md
 # 2. generate an SOP from whatever is in inputs/  ->  out/sop_generated.md
 uv run sop-pipeline run --inputs inputs/ --schema-guide path/to/sop_template_guide.md
 
+# 2a. scope the run to one SOP when inputs/ mixes several processes  ->  out/sop_<slug>.md
+uv run sop-pipeline run --inputs inputs/ --schema-guide path/to/sop_template_guide.md \
+  --sop-name "PFML process" --sop-description "Paid family and medical leave claims handling"
+
+# 2b. revise an existing SOP instead: new inputs fill its gaps, untouched content carries over
+uv run sop-pipeline run --inputs inputs/ --schema-guide path/to/sop_template_guide.md \
+  --sop out/sop_generated.md
+
 # 3. (dev only) score the generated SOP against that same north-star reference
 uv run sop-pipeline evaluate --sop out/sop_generated.md --north-star path/to/sop_north_star.md
 ```
@@ -43,7 +51,7 @@ The north-star SOP is **not tracked in this repo** — it's the answer key, and 
 it in would let it leak into what's being tested. `--north-star` is required for both
 `generate-mocks` and `evaluate`; point it at your own trusted SOP file.
 
-The schema guide (the 11-section template the generator must follow) is also **not
+The schema guide (the 15-section template the generator must follow) is also **not
 tracked in this repo**. `--schema-guide` is required for `run`; point it at your own
 schema guide file.
 
@@ -53,13 +61,20 @@ To run on real client data, drop the transcripts/documents/recordings into `inpu
 Files that are related to each other — e.g. a recording, its transcript, notes about it —
 go in a subfolder of `inputs/`. Each subfolder is extracted as one unit.
 
+If `inputs/` mixes material from several distinct processes, pass `--sop-name` and/or
+`--sop-description` (either alone is enough) to scope the run to one of them — a filtering
+step keeps only the extracted statements relevant to that SOP before reconcile/synthesize
+see them. Omit both to use every extracted statement, unchanged.
+When `--sop-name` is given, the output is written to
+`out/sop_<slug of the name>.md` instead of `out/sop_generated.md`.
+
 ## Layout
 
 | Path | What it is |
 |---|---|
 | `prompts/` | The pipeline logic lives here as prompt files (most of the "code"). |
 | `reference/sop_north_star.md` | **Not tracked in the repo.** User-supplied source-of-truth SOP, passed via `--north-star`. Used for grading **only** — never fed to the generator. |
-| (user-supplied schema guide) | **Not tracked in the repo.** The 11-section schema the generator must follow, passed via `--schema-guide`. **Is** fed to the generator. |
+| (user-supplied schema guide) | **Not tracked in the repo.** The 15-section schema the generator must follow, passed via `--schema-guide`. **Is** fed to the generator. |
 | `inputs/` | The inputs folder the pipeline ingests. |
 | `out/` | Generated SOP (with Mermaid Annex), standalone `.mmd` diagram + rendered `.svg`, gap audit report, extraction JSON, evaluation report. |
 | `fixtures/coverage_manifest.md` | Ground truth for the mock set: what each file omits/contradicts. |
@@ -74,34 +89,47 @@ go in a subfolder of `inputs/`. Each subfolder is extracted as one unit.
   - `prompts/02_extract.md` for text files
   - the **video module** (`src/sop_pipeline/video/`) for recordings, producing the same statement list plus a `supporting_media` timestamp range. It offers several interchangeable extraction strategies, selected in documented in [`src/sop_pipeline/video/README.md`](src/sop_pipeline/video/README.md)
   - `prompts/02_extract_folder.md` for a subfolder of `inputs/` — several records of one session. Its recordings are extracted first, then one fused call over them plus the folder's text yields a single statement list: agreement consolidated, disagreement kept as two statements.
+3b. **filter** (`prompts/02b`, optional) — when `--sop-name` and/or `--sop-description` is given, keeps only the extracted statements relevant to that named SOP before reconcile/synthesize see them; a no-op when neither flag is given. Applies to both from-scratch and revision runs.
 4. **reconcile** (`prompts/07`) — cross-file reduce step: compares every extracted statement against every other to catch same-subject, differing-value disagreements a single-file extraction can't see (e.g. a 5-day vs 10-day threshold). Feeds `synthesize` a `conflicts.json` list to render as typed `AMBIGUITY` gaps.
-5. **synthesize** (`prompts/03`) — extracted statements + reconciled conflicts + SOP template → full SOP, with inline `[GAP G-xx]` + typed §10.
+5. **synthesize** (`prompts/03`) — extracted statements + reconciled conflicts + SOP template → full SOP, with inline `[GAP G-xx]` + typed §12.
 6. **gap audit** (`prompts/04`) — self-critique: catch hallucinations + missing gaps against the raw source corpus.
 7. **revise** (`prompts/08`) — surgical patch: applies the audit's findings back onto the SOP (add/retype/reword gaps, soften unsupported claims) without inventing new content. Followed by deterministic structural checks (gap-ID references, fork-branch completeness, systems coverage) whose warnings are appended to `out/gaps_report.md`.
-8. **diagram** (`prompts/06`) — Mermaid `flowchart TD` mirroring the SOP's Section 6 steps, appended to the SOP as `## Annex 1: Mermaid diagram` (also written to `out/sop_flow_diagram.mmd`). Guarded: the diagram is parse-validated and rendered to `out/sop_flow_diagram.svg` via the Mermaid CLI (retried once on a parse error), and consistency-checked against the SOP body (`validate.validate_diagram`); any parity warnings are also appended to `out/gaps_report.md`.
-9. **evaluate** (`prompts/05`) — LLM-judge: reconstruction coverage + gap accuracy vs the north star.
+8. **diagram** (`prompts/06`) — Mermaid `flowchart TD` mirroring the SOP's Section 7 steps, appended to the SOP as `## Annex 1: Mermaid diagram` (also written to `out/sop_flow_diagram.mmd`).
+9. **invariants** (`prompts/09`) — Gather invariants that apply to the whole SOP.
 
 ```mermaid
 flowchart TD
     IN[(inputs folder — docx, md, txt, mp4)] --> ING{2. Ingest into source-labeled corpus}
     ING --> CORP[(Corpus of inputs)]
 
-    CORP --> EXTRACT_TEXT{3. Extract statements — text files}
-    CORP --> EXTRACT_VIDEO{3. Extract statements — video files, strategy-dependent}
-    CORP --> EXTRACT_FOLDER{3. Extract statements — one folder of related documents, fused}
+    subgraph STMTEXTRACT["Statement extraction"]
+        CORP --> EXTRACT_TEXT{3. Extract statements — text files}
+        CORP --> EXTRACT_VIDEO{3. Extract statements — video files, strategy-dependent}
+        CORP --> EXTRACT_FOLDER{3. Extract statements — one folder of related documents, fused}
 
-    EXTRACT_TEXT --> STMTS[(extraction.json — statements with source, confidence, quote)]
-    EXTRACT_VIDEO --> STMTS
-    EXTRACT_FOLDER --> STMTS
+        EXTRACT_TEXT --> STMTS[(extraction.json — statements with source, confidence, quote)]
+        EXTRACT_VIDEO --> STMTS
+        EXTRACT_FOLDER --> STMTS
+        SOPID[(Sop name + description)] --> FILTER{3b. Filter statements by SOP name/description}
+        STMTS --> FILTER
+        FILTER --> FSTMTS[(filtered_statements.json)]
+    end
 
-    STMTS --> RECON{4. Reconcile — cross-file conflict check}
-    RECON --> CONF[(conflicts.json)]
 
-    STMTS --> SYN{5. Synthesize SOP}
-    CONF --> SYN
-    GUIDE[sop_template.json] --> SYN
+    subgraph SOPINITSYN["SOP initial synthetization"]
+        FSTMTS --> OLD_SOP
+        %% link above doesn't exist in the pipeline, added only for nicer rendering (see linkStyle 11 below)
+        FSTMTS --> RECON{4. Reconcile — cross-file conflict check}
+        OLD_SOP[old_sop.md] --> RECON
+        RECON --> CONF[(conflicts.json)]
 
-    SYN --> SOP1[(sop_generated.md draft — inline GAP tags + typed Section 10)]
+        FSTMTS --> SYN{5. Synthesize SOP}
+        CONF --> SYN
+        OLD_SOP[old_sop.md] --> SYN
+        GUIDE[sop_template.json] --> SYN
+    end
+
+    SYN --> SOP1[(sop_generated.md draft — inline GAP tags + typed Section 12)]
 
     SOP1 --> AUDIT{6. Gap audit — self-critique vs raw corpus}
     CORP --> AUDIT
@@ -115,17 +143,19 @@ flowchart TD
     REVISE --> SOP2[("`**sop_generated.md revised**`")]
 
     subgraph ANNEXCREATE["Annex creation"]
-        SOP2 --> DIAG[8. Diagram — Mermaid flowchart of Section 6]
+        SOP2 --> DIAG[8. Diagram — Mermaid flowchart of Section 7]
         SOP2 --> INV[9. Invariant — Compute invariants of SOP generation]
         DIAG --> ANNEX1[(Annex of SOP)]
         INV --> ANNEX1[(Annex of SOP)]
     end
 
     style SOP2 fill:#2ecc71,stroke:#1e8449,color:#000000
+    linkStyle 11 opacity:0
 ```
 
 - **Facts are extracted** in step 3 (`EXTRACT_TEXT` / `EXTRACT_VIDEO`), one source file at a time — each statement carries its source, a verbatim quote, and a confidence level. Recordings go through the video module, whose chosen strategy decides how the file is turned into statements; the rest of the pipeline is identical either way.
-- **Facts are synthesized** in step 5 (`SYN`), where the per-file statements, the cross-file conflicts from step 4, and the 11-section schema guide are combined into one draft SOP.
+- **Facts are optionally filtered** in step 3b (`FILTER`) — when `--sop-name` and/or `--sop-description` is given, an LLM judge keeps only the statements relevant to that named SOP before reconcile/synthesize see them; with neither flag, `filtered_statements.json` is just `extraction.json` unchanged.
+- **Facts are synthesized** in step 5 (`SYN`), where the per-file statements, the cross-file conflicts from step 4, and the 15-section schema guide are combined into one draft SOP.
 - **Conflicts and gaps surface in layers, never inline as silent guesses:** cross-file value conflicts are caught deterministically in step 4 (`RECON`) and rendered as typed `AMBIGUITY` gaps during synthesis; anything synthesis still misses (hallucinations or ungapped assertions) is caught by the step 6 self-critique (`AUDIT`) and patched into the SOP by step 7 (`REVISE`)
 ## Docs
 

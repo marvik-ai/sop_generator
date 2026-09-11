@@ -161,8 +161,10 @@ def extract(path: Path, knobs: dict) -> list[dict]:
 
         audio_s = float(knobs["audio_chunk_s"])
         text = transcribe.transcript(
-            media.extract_audio(path, work / "audio", chunk_s=audio_s),
+            path,
+            work / "audio",
             chunk_s=audio_s,
+            allow_audio_extraction=bool(knobs.get("allow_audio_extraction", False)),
         )
 
         # Chunk count comes from the recording's actual duration
