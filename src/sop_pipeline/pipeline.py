@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from .validate import (
     validate_systems_coverage,
 )
 
-COMPANY_NAME = "company_name"
+SOP_TARGET_CUSTOMER = os.environ.get("SOP_TARGET_CUSTOMER", "MyAwesomeCompany")
 
 
 def _extract_one(doc: SourceDoc, template: str) -> list[dict]:
@@ -332,7 +333,9 @@ def _extract_doc(
 
 
 def extract(
-    docs: list[SourceDoc], cache_dir: Path | None = None, force: bool = False
+    docs: list[SourceDoc],
+    cache_dir: Path | None = None,
+    force: bool = False,
 ) -> list[dict]:
     """Extract statements from every file and tag each with its source.
 
@@ -352,7 +355,7 @@ def extract(
             statement.setdefault("source", doc.name)
         statements.extend(found)
         suffix = " (cached, unchanged)" if cached else ""
-        print(f"  extracted {len(found)} statements from {doc.name}{suffix}")
+        print(f"  extracted {len(found)} statements from {doc.name}{suffix} ✅")
     return statements
 
 
@@ -767,7 +770,7 @@ def _front_matter(sop_md: str, metadata: dict) -> str:
     except ValueError:
         pass
     lines += [
-        f"**Prepared for:** {metadata.get('prepared_for', COMPANY_NAME)}",
+        f"**Prepared for:** {metadata.get('prepared_for', SOP_TARGET_CUSTOMER)}",
         f"**Prepared by:** {metadata.get('author', 'TBD')}",
         "",
         "---",
@@ -1137,7 +1140,7 @@ def run(
     )
     print(f"Loaded {len(docs)} input file(s).")
 
-    print("Extracting statements...")
+    print("========STATEMENT EXTRACTION========")
     statements = extract(
         docs, cache_dir=out_dir / "extraction_cache", force=force_extract
     )
@@ -1146,7 +1149,7 @@ def run(
     )
 
     if sop_name or sop_description:
-        print(f"Filtering statements for SOP: {(sop_name or sop_description)!r}...")
+        print(f"Filtering statements for SOP: {(sop_name)!r}...")
         statements = filter_by_sop(
             statements,
             sop_name,
@@ -1159,6 +1162,7 @@ def run(
         )
         print(f"  kept {len(statements)} statement(s) for {sop_name!r}.")
 
+    print("========SOP DRAFT GENERATION========")
     print("Reconciling cross-file conflicts...")
     conflicts = reconcile(
         statements, cache_dir=out_dir, force=force_extract, existing_sop=existing_sop
@@ -1166,7 +1170,7 @@ def run(
     (out_dir / "conflicts.json").write_text(
         json.dumps(conflicts, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    print(f"  found {len(conflicts)} cross-file conflict(s).")
+    print(f"  found {len(conflicts)} cross-file conflict(s). ✅")
 
     print("Synthesizing SOP...")
     schema_guide = schema_guide_path.read_text(encoding="utf-8")
@@ -1189,14 +1193,20 @@ def run(
     )
     sop_path = out_dir / sop_filename
     sop_path.write_text(sop_md + "\n", encoding="utf-8")
+    print("  SOP draft created ✅")
 
+    print("========SOP REFINEMENT========")
     print("Auditing for hallucinations / missing gaps...")
     report = gap_audit(sop_md, combined_corpus(audit_docs))
+    report_path = out_dir / "audit_report.md"
+    report_path.write_text(report + "\n", encoding="utf-8")
+    print(f"  audit report created at {report_path} ✅")
 
     print("Revising SOP from audit findings...")
     sop_md = revise(sop_md, report)
     sop_md = _normalize_section1(sop_md, metadata)
     sop_path.write_text(sop_md + "\n", encoding="utf-8")
+    print("  revised SOP created ✅")
 
     structural_warnings = (
         validate_gap_ids(sop_md)
@@ -1206,10 +1216,12 @@ def run(
     for warning in structural_warnings:
         print(f"  WARNING: {warning}")
 
+    print("========ANNEX CREATION========")
     print("Generating flow diagram...")
     mermaid_src, diagram_warnings = build_diagram(sop_md, out_dir)
     for warning in diagram_warnings:
         print(f"  WARNING: {warning}")
+    print("  flow diagram generated ✅")
 
     # Persist the LLM audit + the deterministic validation warnings to one report. Written
     # here (not right after gap_audit) so the warnings computed above are included.
@@ -1236,6 +1248,7 @@ def run(
     print("Deriving cross-cutting invariants...")
     invariants_md = synthesize_invariants(sop_md)
     appendix = _appendix_a(_harvest_checkpoints(sop_md), invariants_md)
+    print("  invariants derived ✅")
 
     print("Assembling front matter + Table of Contents...")
     front = _front_matter(sop_md, metadata)
@@ -1244,5 +1257,5 @@ def run(
     final_sop = f"{front}\n\n---\n\n## Table of Contents\n\n{toc}\n\n---\n\n{body_with_appendix}"
     sop_path.write_text(final_sop, encoding="utf-8")
 
-    print(f"Done -> {sop_path}")
+    print(f"Done -> {sop_path} ✅")
     return sop_path
