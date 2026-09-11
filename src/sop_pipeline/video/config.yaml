@@ -11,7 +11,7 @@
 frame_extraction: uniform
 
 # Which video-to-facts (analysis) strategy runs: naive | sequential.
-strategy: naive
+strategy: sequential
 
 # --- shared by every frame-extraction strategy AND every analysis strategy ---
 shared:
