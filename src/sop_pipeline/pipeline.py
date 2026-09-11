@@ -599,7 +599,7 @@ def synthesize(
 
 
 def revise(sop_md: str, audit_report: str) -> str:
-    """Patch the SOP in place using the gap-audit findings (Section 10 + inline tags)."""
+    """Patch the SOP in place using the gap-audit findings (Section 12 + inline tags)."""
     template = load_prompt("08_revise.md")
     prompt = render(template, SOP=sop_md, AUDIT=audit_report)
     return llm.complete(
@@ -750,7 +750,7 @@ _COMPLETENESS_NOTE = (
     "**Completeness note:** This is a draft that maps every known pathway this process "
     "can take. Many decision points depend on business rules that today live in a rules "
     "database or in customer-specific configuration and are not yet confirmed. Every "
-    "such hole is marked inline as `[GAP G-xx]` and listed in Section 10. The SOP will "
+    "such hole is marked inline as `[GAP G-xx]` and listed in Section 12. The SOP will "
     "be completed iteratively with the client; gaps are surfaced, never invented."
 )
 
@@ -802,7 +802,7 @@ def _checkpoint_scope(text: str) -> str:
 def _harvest_checkpoints(sop_md: str) -> list[dict]:
     """Pull each step's Evaluation-checkpoint bullets + related gap IDs.
 
-    Pure structural parse of the Section 6 step blocks (steps are real `### Step N — ...`
+    Pure structural parse of the Section 7 step blocks (steps are real `### Step N — ...`
     headings; see the synthesize prompt). Returns one dict per checkpoint:
     {"id": "STEP2-C1", "step": 2, "text": "...", "related_gaps": "G-05" | "—"}.
     """
@@ -860,7 +860,7 @@ def _harvest_checkpoints(sop_md: str) -> list[dict]:
 
 _APPENDIX_A_INTRO = (
     "This appendix is **not part of the original SOP body**. It consolidates every "
-    '"Evaluation checkpoint" from Section 6 into a single, individually-addressable list '
+    '"Evaluation checkpoint" from Section 7 into a single, individually-addressable list '
     "so an LLM-as-judge can score an agent's execution trace assertion-by-assertion. Each "
     "checkpoint carries a stable ID (`STEP<n>-C<m>`), the assertion to verify, a scope, "
     "and related gap IDs that may make the assertion unverifiable until the gap is closed."
@@ -926,13 +926,13 @@ def _diagram_advisory(diagram_warnings: list[str]) -> str:
         return ""
     return (
         '> ⚠️ This diagram is known to be incomplete — see the "Deterministic validation '
-        'warnings" section of gaps_report.md. Some declared IF/THEN branches and Section 9 '
+        'warnings" section of gaps_report.md. Some declared IF/THEN branches and Section 11 '
         "end states are not represented as edges/terminal nodes.\n\n"
     )
 
 
 def generate_diagram(sop_md: str, parser_feedback: str = "") -> str:
-    """Generate a Mermaid flowchart (TD) mirroring the SOP's Section 6 steps.
+    """Generate a Mermaid flowchart (TD) mirroring the SOP's Section 7 steps.
 
     `parser_feedback` is empty on the first attempt; on a retry it carries the previous
     Mermaid parser error so the model can fix the broken output (see build_diagram).
@@ -1063,7 +1063,7 @@ def _check_manifest_rules(sop_md: str, manifest: str = "") -> str:
 
     lines = [
         "The table below is the output of a **deterministic Python keyword check** "
-        "against Section 10. These verdicts are computed from literal substring "
+        "against Section 12. These verdicts are computed from literal substring "
         "matches — they are FIXED. Copy them verbatim into the corresponding "
         "rows of your gap-by-gap trace table; do not change Matched Gap ID or Verdict "
         "for these rows.",

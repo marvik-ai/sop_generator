@@ -2,7 +2,7 @@
 
 You are revising an existing SOP, supplied below (EXISTING SOP), using new extracted
 statements gathered specifically to close its gaps. Output the **full revised SOP**,
-covering Sections 1–11 as the schema guide defines them — not a diff, not a patch, not
+covering Sections 1–15 as the schema guide defines them — not a diff, not a patch, not
 a changelog.
 
 This amends the base rule "build ONLY from the supplied extracted statements": the
@@ -31,12 +31,14 @@ How to merge:
   from-scratch synthesis.
 - **Update the change log.** VERSION already reflects the bumped version number for this
   revision (the run computed it from the existing SOP's own `Version` field, incremented by
-  0.1 — e.g. `0.1` becomes `0.2`). In Section 11, keep every existing row unchanged and append
+  0.1 — e.g. `0.1` becomes `0.2`). In Section 13, keep every existing row unchanged and append
   one new row for this revision using that VERSION value, RUN_DATE, and a brief description of
   what changed in this revision.
 - **Never carry over the Annex/Appendix.** The EXISTING SOP
   below may already end with an appended "Annex 1: Mermaid diagram" and/or "Appendix
-  A: Machine-readable evaluation checkpoint index" section. Do not carry it over.
+  A: Machine-readable evaluation checkpoint index" section — these are generated
+  deterministically after synthesis and are distinct from the schema guide's own Section 15
+  Appendix A (Unclassified items). Do not carry either appended section over.
 - **When sourcing documents**: Cite the old SOP once, not its transitive
   sources.** Set this field to exactly: the existing SOP file
   ({{EXISTING_SOP_NAME}}) plus the new source file(s) used for this revision

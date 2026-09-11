@@ -14,12 +14,12 @@ from dataclasses import dataclass, field
 
 _INLINE_GAP = re.compile(r"\[GAP\s+(G-\d+)")
 _ANY_GAP_ID = re.compile(r"\bG-\d+\b")
-_SECTION17_HEADING = re.compile(r"^#+\s*17\.", re.MULTILINE)
+_SECTION12_HEADING = re.compile(r"^#+\s*12\.", re.MULTILINE)
 _NEXT_HEADING = re.compile(r"^#+\s+\d+\.", re.MULTILINE)
 _SECTION1_HEADING = re.compile(r"^#+\s*1\.", re.MULTILINE)
 _TABLE_GAP_ID = re.compile(r"^\|\s*(G-\d+)\s*\|", re.MULTILINE)
 
-# Section 8 step headings. Captures the step id, which is either a plain number ("5") or a
+# Section 7 step headings. Captures the step id, which is either a plain number ("5") or a
 # branch sub-step id ("5.A1" = fork at Step 5, Branch A, sub-step 1).
 _STEP_HEADING = re.compile(
     r"^#{1,6}\s*Step\s+(\d+(?:\.[A-Za-z]\d+)?)\b[^\n]*$", re.MULTILINE
@@ -45,40 +45,40 @@ def _section(md: str, start: re.Pattern[str]) -> str:
 
 
 def validate_gap_ids(sop_md: str) -> list[str]:
-    """Check inline `[GAP G-xx]` tags against the Section 17 gaps log.
+    """Check inline `[GAP G-xx]` tags against the Section 12 gaps log.
 
     Returns a list of human-readable warnings (empty list == clean):
-      - a gap ID declared on more than one Section 17 row (collision);
-      - an inline `[GAP G-xx]` tag whose ID has no Section 17 row;
-      - a Section 17 row never referenced anywhere in the body (orphan);
+      - a gap ID declared on more than one Section 12 row (collision);
+      - an inline `[GAP G-xx]` tag whose ID has no Section 12 row;
+      - a Section 12 row never referenced anywhere in the body (orphan);
       - any `[GAP ...]` tag inside the Section 1 metadata table (document-admin misuse).
 
-    A "reference" is any `G-xx` mention in the body outside the Section 17 table — both
+    A "reference" is any `G-xx` mention in the body outside the Section 12 table — both
     bracketed `[GAP G-xx]` tags and the bare `G-xx` form the per-step "Open questions /
     gaps" field uses count.
     """
     warnings: list[str] = []
 
-    section17 = _section(sop_md, _SECTION17_HEADING)
-    declared = _TABLE_GAP_ID.findall(section17)
+    section12 = _section(sop_md, _SECTION12_HEADING)
+    declared = _TABLE_GAP_ID.findall(section12)
     declared_set = set(declared)
 
     seen: set[str] = set()
     for gap_id in declared:
         if gap_id in seen:
             warnings.append(
-                f"Gap ID {gap_id} is declared on more than one Section 17 row."
+                f"Gap ID {gap_id} is declared on more than one Section 12 row."
             )
         seen.add(gap_id)
 
     inline_ids = set(_INLINE_GAP.findall(sop_md))
     for gap_id in sorted(inline_ids - declared_set):
-        warnings.append(f"Inline [GAP {gap_id}] has no matching row in Section 17.")
+        warnings.append(f"Inline [GAP {gap_id}] has no matching row in Section 12.")
 
-    body = sop_md.replace(section17, "")
+    body = sop_md.replace(section12, "")
     referenced = set(_ANY_GAP_ID.findall(body))
     for gap_id in sorted(declared_set - referenced):
-        warnings.append(f"Section 17 row {gap_id} is never referenced in the body.")
+        warnings.append(f"Section 12 row {gap_id} is never referenced in the body.")
 
     section1 = _section(sop_md, _SECTION1_HEADING)
     if _INLINE_GAP.search(section1):
@@ -91,7 +91,7 @@ def validate_gap_ids(sop_md: str) -> list[str]:
 
 
 def validate_branches(sop_md: str) -> list[str]:
-    """Check the integrity of any true-bifurcation fork blocks in Section 8.
+    """Check the integrity of any true-bifurcation fork blocks in Section 7.
 
     A fork is a step whose heading ends in `[DECISION]`; its branches run as sub-steps
     numbered `Step N.A1`, `Step N.B1`, … and may rejoin at a later "Reconverges at" step.
@@ -256,8 +256,8 @@ def _content_tokens(text: str) -> set[str]:
 def validate_systems_coverage(sop_md: str, statements: list[dict]) -> list[str]:
     """Advisory: flag any extracted `systems` statement absent from Section 5.
 
-    Deterministic (no LLM) parity check between the extraction and the SOP's Systems & data
-    sources table. For each statement tagged `target_section == "systems"`, warn when none
+    Deterministic (no LLM) parity check between the extraction and the SOP's Systems &
+    integrations section. For each statement tagged `target_section == "systems"`, warn when none
     of its identity-bearing tokens appear in Section 5 — i.e. the system it names was dropped
     from the table. Token-overlap (not exact match) keeps false positives low: a system that
     shows up under any wording still counts as covered. Returns warnings (empty == clean).
@@ -304,7 +304,7 @@ _EDGE_RE = re.compile(
 # Step nodes follow the `S<n>` / `S<n><letter><k>` convention from the diagram prompt.
 _STEP_NODE_RE = re.compile(r"^S\d+(?:[A-Za-z]\d+)?$")
 _THEN_RE = re.compile(r"\bTHEN\b", re.IGNORECASE)
-_SECTION15_HEADING = re.compile(r"^#+\s*15\.", re.MULTILINE)
+_SECTION11_HEADING = re.compile(r"^#+\s*11\.", re.MULTILINE)
 _TABLE_FIRST_CELL_RE = re.compile(r"^\|\s*([^|]+?)\s*\|")
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
@@ -338,12 +338,12 @@ def _parse_mermaid(mmd_source: str) -> _Diagram:
 
 
 def _node_id_for_step(step_id: str) -> str:
-    """Map a Section 8 step id to its diagram node id ('5.A1' -> 'S5A1', '3' -> 'S3')."""
+    """Map a Section 7 step id to its diagram node id ('5.A1' -> 'S5A1', '3' -> 'S3')."""
     return "S" + step_id.replace(".", "")
 
 
 def _step_blocks(sop_md: str) -> dict[str, str]:
-    """Section 8 step id -> its block text (heading to the next step heading / EOF)."""
+    """Section 7 step id -> its block text (heading to the next step heading / EOF)."""
     matches = list(_STEP_HEADING.finditer(sop_md))
     blocks: dict[str, str] = {}
     for i, m in enumerate(matches):
@@ -353,10 +353,10 @@ def _step_blocks(sop_md: str) -> dict[str, str]:
 
 
 def _end_states(sop_md: str) -> list[str]:
-    """First-column labels of the Section 15 End-state catalog table."""
-    section15 = _section(sop_md, _SECTION15_HEADING)
+    """First-column labels of the Section 11 End-state catalog table."""
+    section11 = _section(sop_md, _SECTION11_HEADING)
     states: list[str] = []
-    for line in section15.splitlines():
+    for line in section11.splitlines():
         cell = _TABLE_FIRST_CELL_RE.match(line)
         if not cell:
             continue
@@ -378,11 +378,11 @@ def validate_diagram(sop_md: str, mmd_source: str) -> list[str]:
 
     Deterministic (no LLM) structural parity between Annex 1 and the SOP body. Returns
     human-readable warnings (empty == clean):
-      - node/step parity: every Section 8 step has exactly one node; no node is invented;
+      - node/step parity: every Section 7 step has exactly one node; no node is invented;
       - branch/edge parity: a step's node has at least as many outgoing edges as the step
         declares IF/THEN branches (a heuristic upper bound — multiple IF/THEN clauses may
         legitimately converge to one target, so this is advisory and only flags a *deficit*);
-      - end-state coverage: every Section 15 end state appears as a terminal node.
+      - end-state coverage: every Section 11 end state appears as a terminal node.
 
     Not covered (tracked separately, see the ticket): visualising `[GAP G-xx]` routing tags,
     and run-to-run id/label drift from the LLM generator.
@@ -397,7 +397,7 @@ def validate_diagram(sop_md: str, mmd_source: str) -> list[str]:
     for node_id, step_id in sorted(expected.items()):
         if node_id not in diagram.node_ids:
             warnings.append(
-                f"Section 8 Step {step_id} has no matching node {node_id} in the diagram."
+                f"Section 7 Step {step_id} has no matching node {node_id} in the diagram."
             )
         elif diagram.node_def_counts.get(node_id, 0) > 1:
             warnings.append(
@@ -406,7 +406,7 @@ def validate_diagram(sop_md: str, mmd_source: str) -> list[str]:
     step_nodes = {nid for nid in diagram.node_ids if _STEP_NODE_RE.match(nid)}
     for node_id in sorted(step_nodes - set(expected)):
         warnings.append(
-            f"Diagram node {node_id} has no matching Section 8 step (invented node)."
+            f"Diagram node {node_id} has no matching Section 7 step (invented node)."
         )
 
     # --- branch/edge parity (advisory heuristic) ---
@@ -437,7 +437,7 @@ def validate_diagram(sop_md: str, mmd_source: str) -> list[str]:
         words = _words(end_state)
         if words and not any(words <= terminal for terminal in terminal_word_sets):
             warnings.append(
-                f"End state '{end_state}' from Section 15 has no terminal node in the "
+                f"End state '{end_state}' from Section 11 has no terminal node in the "
                 "diagram."
             )
 

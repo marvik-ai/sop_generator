@@ -9,7 +9,7 @@ Your single most important rule:
 > **FLAG, DON'T HALLUCINATE.** Build the SOP ONLY from the supplied extracted statements.
 > If a required piece of information is missing, uncertain, or contradicted across
 > sources, do NOT invent it. Write the best-supported version, mark it inline with a
-> `[GAP G-xx]` tag, and record a typed row in Section 10. Garbage in must yield
+> `[GAP G-xx]` tag, and record a typed row in Section 12. Garbage in must yield
 > "best effort + explicit gaps", never a confident fabrication.
 
 ## How to use the extracted statements
@@ -35,26 +35,26 @@ Your single most important rule:
   (`ASSUMPTION` or `MISSING-DETAIL` as appropriate).
 - Where the structure guide expects something the extracted statements never cover (e.g., exact
   thresholds, a customer list, opaque rule internals, specific UI fields), write what is
-  known, insert a `[GAP G-xx]`, and add the row to Section 10. Never fill the hole.
+  known, insert a `[GAP G-xx]`, and add the row to Section 12. Never fill the hole.
 - **Detected conflicts (provided separately below) MUST each become an `AMBIGUITY` gap.**
   A reconcile stage has already compared statements across all source files and handed
   you the genuine same-subject value-disagreements. For every entry in DETECTED CONFLICTS,
   raise one `AMBIGUITY` gap that names **both** conflicting values AND the source file each
   came from, phrased as a decision the reviewer must make. Do not silently pick one value.
-- **Every gap MUST be anchored inline — a Section 10 row alone is an error.** Each gap
+- **Every gap MUST be anchored inline — a Section 12 row alone is an error.** Each gap
   (especially conflict-derived `AMBIGUITY` gaps) must carry an inline `[GAP G-xx]` tag at
-  the **Section 6 step** it affects — and, if it concerns a rule, also next to that rule's
-  row in the **Section 7** business-rules table. A gap that appears only in Section 10 with
+  the **Section 7 step** it affects — and, if it concerns a rule, also next to that rule's
+  field in the step block. A gap that appears only in Section 12 with
   no inline `[GAP G-xx]` anchor in the body is incomplete and must be fixed before output.
-  Anchor each gap in the body section it concerns (a Section 6 step, a Section 7 rule, or
-  the Section 4 system it relates to). **Never place a `[GAP G-xx]` tag in the Section 1
+  Anchor each gap in the body section it concerns (a Section 7 step, a Section 7 rule, or
+  the Section 5 system it relates to). **Never place a `[GAP G-xx]` tag in the Section 1
   document-control table**, and never next to an already-filled metadata field such as Last
   updated or Author. Every gap is about unconfirmed *process content*, not document admin.
 - **Mentioned-but-undetailed → `MISSING-DETAIL` gap.** Whenever the SOP references a
   system, action, list, threshold, screen, or field whose concrete value is NOT present in
   the extracted statements (e.g. "Operational UI automation" is named but no specific UI
   screens/fields are given), say what is known, tag it `[GAP G-xx]`, and add a
-  `MISSING-DETAIL` row to Section 10. Never present such an item as if its detail were
+  `MISSING-DETAIL` row to Section 12. Never present such an item as if its detail were
   known.
 - **One gap per distinct opaque rule — never merge them.** When several different rules
   hidden in the rules database govern a process, raise a separate `OPAQUE-RULE` gap for
@@ -95,15 +95,15 @@ Distinguish two cases when the process branches:
   actually say. If the sources name a fork but not its sub-steps or reconvergence, write
   the best-supported version and raise a `MISSING-DETAIL` gap — never invent branches.
 
-## Gap types (Section 10)
+## Gap types (Section 12)
 `OPAQUE-RULE` (logic hidden in a rules DB / spreadsheet) · `MISSING-DETAIL` (sources don't
 say) · `AMBIGUITY` (sources conflict) · `ASSUMPTION` (you proceeded on an unconfirmed
-assumption). Each Section 10 row is a concrete question for the reviewer to resolve.
+assumption). Each Section 12 row is a concrete question for the reviewer to resolve.
 
 ## Output requirements
-- Follow the structure guide's required sections (1–11) and the per-step block schema in
-  Section 6 exactly. Fill every field; use "N/A (reason)" only when truly inapplicable.
-- **Write each Section 6 step as a real markdown heading, not a blockquote.** The
+- Follow the structure guide's required sections (1–15) and the per-step block schema in
+  Section 7 exactly. Fill every field; use "N/A (reason)" only when truly inapplicable.
+- **Write each Section 7 step as a real markdown heading, not a blockquote.** The
   structure guide shows the step block prefixed with `>` purely as a formatting
   convention for displaying the schema inside that guide document — do NOT carry the `>`
   into the SOP itself. In the SOP, each step must start with a literal heading
@@ -113,16 +113,16 @@ assumption). Each Section 10 row is a concrete question for the reviewer to reso
   <outcome>`, covering all branches including the "otherwise" case.
 - No code symbols, function names, or tool names anywhere — operative business language
   only (name the system, screen, field, value, action).
-- Keep ALL gaps in the structured Section 10 log plus inline `[GAP G-xx]` tags — never
+- Keep ALL gaps in the structured Section 12 log plus inline `[GAP G-xx]` tags — never
   as loose commentary in the middle of the prose.
 - In Section 1, list the actual source files used under "Source documents". Fill the
   document-control fields from the DOCUMENT METADATA block below: **Last updated** =
   RUN_DATE, **Author / owner** = AUTHOR, **Version** = VERSION, **Status** = STATUS.
 - **Document-admin blanks are NOT gaps.** Fields like Author, Reviewers/sign-off, or dates
   are document metadata, not process logic. If unknown, write `TBD` — NEVER a `[GAP G-xx]`
-  tag. `[GAP G-xx]` tags and Section 10 rows are reserved exclusively for unconfirmed
+  tag. `[GAP G-xx]` tags and Section 12 rows are reserved exclusively for unconfirmed
   process content, and every gap ID must be unique and mean exactly one thing.
-- In Section 5, describe the high-level flow in prose but do NOT draw the flow diagram — a
+- In Section 6, describe the high-level flow in prose but do NOT draw the flow diagram — a
   separate stage generates the Mermaid diagram from the finished SOP and appends it as
   "Annex 1: Mermaid diagram". You may note "See Annex 1 for the Mermaid flow diagram."
 - Output ONLY the SOP markdown. No preamble, no code fences around the whole document.

@@ -231,7 +231,7 @@ actual inputs. The model is instructed to:
   rather than picking a side.
 - When an extracted statement is hedged/low-confidence, use it but flag it.
 - When the schema expects something the extracted statements never cover at all, write what's known,
-  insert an inline `[GAP G-xx]` tag, and add a row to Section 10 — never invent the
+  insert an inline `[GAP G-xx]` tag, and add a row to Section 12 — never invent the
   missing piece.
 - Use explicit `IF <condition> THEN <outcome>` for every decision, covering the
   "otherwise" case.
@@ -267,7 +267,7 @@ the gap audit on purpose — the audit checks only the SOP body, so the diagram 
 trips the hallucination check.
 
 The prompt gets the synthesized SOP and is instructed to **mirror, not invent**: one node
-per Section 6 step (`S1[Step 1 — …]`, in order), a labeled edge for every branch in each
+per Section 7 step (`S1[Step 1 — …]`, in order), a labeled edge for every branch in each
 step's *Outcomes & routing* / *Stop / exit conditions* (including the "otherwise"/stop
 branch), and distinct terminal nodes for the end states from Sections 5 and 9 (reusing one
 node id when several steps route to the same outcome). It carries the north-star diagram as a
@@ -291,10 +291,10 @@ The raw generation is unguarded, so `build_diagram()` wraps it with three checks
    `mmdc` is not installed, the parse/render guard is **skipped with a warning** (the pipeline
    stays runnable without Node); the `.mmd` and SOP are still written.
 2. **Consistency check (`validate.validate_diagram()`).** A deterministic (no-LLM) parity
-   check between Annex 1 and the SOP body: every Section 6 step appears as exactly one node
+   check between Annex 1 and the SOP body: every Section 7 step appears as exactly one node
    (and no node is invented), each step's node has at least as many outgoing edges as the step
    declares IF/THEN branches (an advisory heuristic — it flags a deficit only), and every
-   Section 9 end state appears as a terminal node. Mismatches print as warnings.
+   Section 11 end state appears as a terminal node. Mismatches print as warnings.
 
 Not covered (tracked separately): visualising `[GAP G-xx]` routing tags in the diagram, and
 run-to-run id/label drift from the LLM generator.
@@ -317,7 +317,7 @@ the pipeline at exactly two points:
   a new statement supplying it is a resolution.
 - **Synthesize** (`prompts/03_synthesize_sop.md` + the `03b_revise_existing_sop.md`
   overlay): the model outputs the full revised SOP, not a diff. Resolved gaps lose their
-  inline `[GAP G-xx]` tag and Section 10 row (surviving gaps renumber contiguously from
+  inline `[GAP G-xx]` tag and Section 12 row (surviving gaps renumber contiguously from
   `G-01`); untouched sections and unresolved gaps carry over unchanged; a confident
   contradiction becomes a new `AMBIGUITY` gap naming both the SOP and the new source.
 
